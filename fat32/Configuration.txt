@@ -27,16 +27,3 @@ FAT_PRINTF
   A define that allows the File IO library to print to console/stdout. 
   Provide your own printf function if printf not available.
 
-FAT_CLUSTER_CACHE_ENTRIES
-  Size of cluster chain cache (can be undefined if not required).
-  Mem used = FAT_CLUSTER_CACHE_ENTRIES * 4 * 2
-  Improves access speed considerably.
-
-FATFS_INC_LFN_SUPPORT 	[1/0]
-  Enable/Disable support for long filenames.
-
-FATFS_DIR_LIST_SUPPORT 	[1/0]
-  Include support for directory listing.
-
-FATFS_INC_FORMAT_SUPPORT
-  Include support for formatting disks (FAT16 only).

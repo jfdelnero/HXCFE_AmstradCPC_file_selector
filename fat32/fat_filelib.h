@@ -28,12 +28,6 @@
 //-----------------------------------------------------------------------------
 struct sFL_FILE;
 
-struct cluster_lookup
-{
-	UINT32 ClusterIdx;
-	UINT32 CurrentCluster;
-};
-
 typedef struct sFL_FILE
 {
 	unsigned long			parentcluster;
@@ -41,17 +35,9 @@ typedef struct sFL_FILE
 	unsigned long			bytenum;
 	unsigned long			filelength;
 	int						filelength_changed;
-	//char					path[FATFS_MAX_LONG_FILENAME];
+	char					path[FATFS_MAX_LONG_FILENAME];
 	char					filename[FATFS_MAX_LONG_FILENAME];
 	unsigned char			shortfilename[11];
-
-#ifdef FAT_CLUSTER_CACHE_ENTRIES
-//	unsigned long			cluster_cache_idx[FAT_CLUSTER_CACHE_ENTRIES];
-//	unsigned long			cluster_cache_data[FAT_CLUSTER_CACHE_ENTRIES];
-#endif
-
-	// Cluster Lookup
-	struct cluster_lookup	last_fat_lookup;
 
 	// Read/Write sector buffer
 	struct sector_buffer	file_data;
@@ -86,7 +72,7 @@ int					fl_fgetc(void *file);
 int					fl_fputc(int c, void *file);
 int					fl_fputs(const char * str, void *file);
 int					fl_fwrite(const void * data, int size, int count, void *file );
-int					fl_fswrite(unsigned char * buffer, int size,int start_sector, void *f);
+int                                     fl_fswrite(unsigned char * buffer, int size, void *f);
 int					fl_fread(void * data, int size, int count, void *file );
 int					fl_fseek(void *file , long offset , int origin );
 int					fl_fgetpos(void *file , unsigned long * position);
@@ -97,36 +83,9 @@ int					fl_remove( const char * filename );
 // Extensions
 void				fl_listdirectory(const char *path);
 int					fl_createdirectory(const char *path);
-int					fl_list_opendir(const char *path, struct fs_dir_list_status *dirls);
-int					fl_list_readdir(struct fs_dir_list_status *dirls, struct fs_dir_ent *entry);
-int					fl_is_dir(const char *path);
+unsigned long fl_change_entry(UINT32 cluster,int dir,unsigned long entryindex,FAT32_ShortEntry *sfEntry,unsigned char * filename) ;
 
-// Test hooks
-#ifdef FATFS_INC_TEST_HOOKS
-struct fatfs*		fl_get_fs(void);
-#endif
+UINT32 get_root_cluster();
 
-//-----------------------------------------------------------------------------
-// Stdio file I/O names
-//-----------------------------------------------------------------------------
-#ifdef USE_FILELIB_STDIO_COMPAT_NAMES
-
-#define FILE			FL_FILE
-
-#define fopen(a,b)		fl_fopen(a, b)
-#define fclose(a)		fl_fclose(a)
-#define fflush(a)		fl_fflush(a)
-#define fgetc(a)		fl_fgetc(a)
-#define fputc(a,b)		fl_fputc(a, b)
-#define fputs(a,b)		fl_fputs(a, b)
-#define fwrite(a,b,c,d)	fl_fwrite(a, b, c, d)
-#define fread(a,b,c,d)	fl_fread(a, b, c, d)
-#define fseek(a,b,c)	fl_fseek(a, b, c)
-#define fgetpos(a,b)	fl_fgetpos(a, b)
-#define ftell(a)		fl_ftell(a)
-#define feof(a)			fl_feof(a)
-#define remove(a)		fl_remove(a)
-
-#endif
 
 #endif

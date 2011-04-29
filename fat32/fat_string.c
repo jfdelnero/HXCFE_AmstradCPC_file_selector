@@ -1,7 +1,7 @@
 //-----------------------------------------------------------------------------
 //-----------------------------------------------------------------------------
-//					        FAT16/32 File IO Library
-//								    V2.6
+//					        FAT32 File IO Library
+//								    V2.5
 // 	  							 Rob Riglar
 //						    Copyright 2003 - 2010
 //
@@ -12,20 +12,20 @@
 //   closed source commercial applications please contact me for details.
 //-----------------------------------------------------------------------------
 //
-// This file is part of FAT File IO Library.
+// This file is part of FAT32 File IO Library.
 //
-// FAT File IO Library is free software; you can redistribute it and/or modify
+// FAT32 File IO Library is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation; either version 2 of the License, or
 // (at your option) any later version.
 //
-// FAT File IO Library is distributed in the hope that it will be useful,
+// FAT32 File IO Library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with FAT File IO Library; if not, write to the Free Software
+// along with FAT32 File IO Library; if not, write to the Free Software
 // Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 //-----------------------------------------------------------------------------
 //-----------------------------------------------------------------------------
@@ -165,17 +165,14 @@ int fatfs_split_path(char *full_path, char *path, int max_path, char *filename, 
 
 	// If root file
 	if (levels == 0)
-	{
-		if(path)
-		  path[0] = '\0';
-	}	
+		path[0] = '\0';
 	else
 	{
 		strindex = (int)strlen(full_path) - (int)strlen(filename);
 		if (strindex > max_path)
 			strindex = max_path;
-		if(path)
-			memcpy(path, full_path, strindex);
+
+		memcpy(path, full_path, strindex);
 		path[strindex-1] = '\0';
 	}
 
@@ -189,9 +186,8 @@ static int FileString_StrCmpNoCase(char *s1, char *s2, int n)
 	int diff;
 	char a,b;
 
-	while (n)
+	while (n--)
 	{
-		n--;
 		a = *s1;
 		b = *s2;
 
@@ -288,10 +284,6 @@ int fatfs_compare_names(char* strA, char* strB)
 		// Set pointer to start of extension
 		ext1 = strA+ext1Pos+1;
 		ext2 = strB+ext2Pos+1;
-
-		// Verify that the file extension lengths match!
-		if (strlen(ext1) != strlen(ext2))
-			return 0;
 		
 		// If they dont match
 		if (FileString_StrCmpNoCase(ext1, ext2, (int)strlen(ext1))!=0) 
@@ -323,3 +315,61 @@ int fatfs_compare_names(char* strA, char* strB)
 	else
 		return 1;
 }
+//-----------------------------------------------------------------------------
+// Test Bench
+//-----------------------------------------------------------------------------
+#ifdef FAT_STRING_TESTBENCH
+void main(void)
+{
+	char output[255];
+	char output2[255];
+
+	assert(fatfs_total_path_levels("C:\\folder\\file.zip") == 1);
+	assert(fatfs_total_path_levels("C:\\file.zip") == 0);
+	assert(fatfs_total_path_levels("C:\\folder\\folder2\\file.zip") == 2);
+	assert(fatfs_total_path_levels("C:\\") == -1);
+	assert(fatfs_total_path_levels("") == -1);
+	assert(fatfs_total_path_levels("/dev/etc/file.zip") == 2);
+	assert(fatfs_total_path_levels("/dev/file.zip") == 1);
+
+	assert(fatfs_get_substring("C:\\folder\\file.zip", 0, output, sizeof(output)) == 0);
+	assert(strcmp(output, "folder") == 0);
+
+	assert(fatfs_get_substring("C:\\folder\\file.zip", 1, output, sizeof(output)) == 0);
+	assert(strcmp(output, "file.zip") == 0);
+
+	assert(fatfs_get_substring("/dev/etc/file.zip", 0, output, sizeof(output)) == 0);
+	assert(strcmp(output, "dev") == 0);
+
+	assert(fatfs_get_substring("/dev/etc/file.zip", 1, output, sizeof(output)) == 0);
+	assert(strcmp(output, "etc") == 0);
+
+	assert(fatfs_get_substring("/dev/etc/file.zip", 2, output, sizeof(output)) == 0);
+	assert(strcmp(output, "file.zip") == 0);
+
+	assert(fatfs_split_path("C:\\folder\\file.zip", output, sizeof(output), output2, sizeof(output2)) == 0);
+	assert(strcmp(output, "C:\\folder") == 0);
+	assert(strcmp(output2, "file.zip") == 0);
+
+	assert(fatfs_split_path("C:\\file.zip", output, sizeof(output), output2, sizeof(output2)) == 0);
+	assert(output[0] == 0);
+	assert(strcmp(output2, "file.zip") == 0);
+
+	assert(fatfs_split_path("/dev/etc/file.zip", output, sizeof(output), output2, sizeof(output2)) == 0);
+	assert(strcmp(output, "/dev/etc") == 0);
+	assert(strcmp(output2, "file.zip") == 0);
+
+	assert(FileString_GetExtension("C:\\file.zip") == strlen("C:\\file"));
+	assert(FileString_GetExtension("C:\\file.zip.ext") == strlen("C:\\file.zip"));
+	assert(FileString_GetExtension("C:\\file.zip.") == strlen("C:\\file.zip"));
+
+	assert(FileString_TrimLength("C:\\file.zip", strlen("C:\\file.zip")) == strlen("C:\\file.zip"));
+	assert(FileString_TrimLength("C:\\file.zip   ", strlen("C:\\file.zip   ")) == strlen("C:\\file.zip"));
+	assert(FileString_TrimLength("   ", strlen("   ")) == 0);
+
+	assert(fatfs_compare_names("C:\\file.ext", "C:\\file.ext") == 1);
+	assert(fatfs_compare_names("C:\\file2.ext", "C:\\file.ext") == 0);
+	assert(fatfs_compare_names("C:\\file  .ext", "C:\\file.ext") == 1);
+	assert(fatfs_compare_names("C:\\file  .ext", "C:\\file2.ext") == 0);
+}
+#endif

@@ -28,7 +28,7 @@ CC = sdcc
 # -mz80 defines the CPU architecture to compile for
 # -S means to compile but do not assemble or link
 # --no-std-crt0 tells SDCC to not use the standard crt0 startup.
-CFLAGS = -mz80 -S --no-std-crt0 --vc -I./fat32    --opt-code-size
+CFLAGS = -mz80 -S --no-std-crt0   -I./fat32
 
 # this is a variable defining the parameters to pass to the assembler
 
@@ -43,7 +43,7 @@ AFLAGS = -g
 #
 # crt0.s must be first because it contains the startup code
 
-OBJS_O = crt0.o cpcbioscall.o fectrl.o gui_utils.o ./fat32/fat_access.o ./fat32/fat_filelib.o ./fat32/fat_misc.o ./fat32/fat_string.o ./fat32/fat_table.o ./fat32/fat_write.o ./fat32/fat_cache.o
+OBJS_O = crt0.o cpcbioscall.o fectrl.o gui_utils.o ./fat32/fat_access.o ./fat32/fat_filelib.o ./fat32/fat_misc.o ./fat32/fat_string.o ./fat32/fat_table.o ./fat32/fat_write.o
 
 
 # This is the rule to build the executable called 'file'.
@@ -61,24 +61,27 @@ OBJS_O = crt0.o cpcbioscall.o fectrl.o gui_utils.o ./fat32/fat_access.o ./fat32/
 
 file: $(OBJS_O)
 	sdldz80 -f main.lnk
-	./tools/makebin -p -b 256 < file.ihx > hxc.prg
-	./tools/exomizer raw hxc.prg -o hxc.prg.tmp.pck
-	./tools/exoopt hxc.prg.tmp.pck hxc.prg.pck
-	./tools/exomizer raw fasttext.bin -o fasttext.bin.tmp.pck
-	./tools/exoopt fasttext.bin.tmp.pck fasttext.bin.pck
-	./tools/Pasmo startCore.s startCore.bin
-	./tools/Pasmo --amsdos start.s hxc.bin
-	./cpcxfs/cpcxfsw -f -b -nd AUTOBOOT.dsk -p hxc.bin
-	#mkdir ./Output
-	#mv --force ./AUTOBOOT.DSK Output
-	./tools/hxcfloppyemulator_convert.exe AUTOBOOT.DSK -HFE >hfeconv.log
-	mv --force AUTOBOOT_DSK.hfe AUTOBOOT.HFE
+	./tools/makebin -p -b 256 < file.ihx > file.bin
+	#./tools/exomizer  raw file.bin
+ 	#cp a.out file.bin
+	./tools/addhead -a -s 256 -x 256 file.bin hxc.prg
+	sdasz80 -o hxcbl.rel deexo.s
+	sdldz80 -f hxcbl.lnk
+	./tools/hex2bin hxcbl.ihx
+	./graphx/converttools/bmptoh background.bmp  -BMP1
+	./tools/exomizer  raw data_bmp_background_bmp.bin
+	cp a.out backg.packed
+	cat hxcbl.bin backg.packed > hxc.bin
+	./tools/addhead -a -s 36864 -x 36864 hxc.bin hxc.bin
+	./cpcxfs/cpcxfsw -b -nd AUTOBOOT.dsk -p hxc.bin -p hxc.prg
+	cmd /c 'startfe.bat' &
+
 
 # use this rule to clean up all intermediate build files
 #
 # e.g. "make clean"
 clean:
-	rm *.o *.rel *.asm *.sym *.lst *.map *.ihx fat32/*.o fat32/*.rel fat32/*.asm fat32/*.sym fat32/*.lst fat32/*.map fat32/*.bin fat32/*.ihx
+	rm *.o *.rel *.asm *.sym *.lst *.map *.bin *.ihx fat32/*.o fat32/*.rel fat32/*.asm fat32/*.sym fat32/*.lst fat32/*.map fat32/*.bin fat32/*.ihx
 
 
 # this rule defines how we can produce a '.o' file from a '.c' file

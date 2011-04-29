@@ -18,32 +18,6 @@ init:
 
 ;; Initialise global variables
         call    gsinit
-	
-	
-	ld a, #2
-	call #0xbc0e
-	
-       ld   b,#1
-       ld   c,b
-       call #0xBC38 ; SCR SET BORDER
-       
-       ld a, #0
-       ld   b,#1
-       ld   c,b
-       call #0xBC32 ; background
-       
-       ld a, #1
-       ld   b,#20
-       ld   c,b
-       call #0xBC32 ; background
-       
-       
-	ld bc, #0xbc06
-	out (c), c
-	inc b
-	ld a, #25
-	out (c), a
-       
 	call	_main
 	jp	_exit
 

@@ -1,5 +1,5 @@
-FAT File IO Library License
--=-=-=-=-=-=-=-=-=-=-=-=-=-
+FAT32 File IO Library License
+-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 This versions license: GPL
 

@@ -1,131 +1,89 @@
-/*
-//
-// Copyright (C) 2009, 2010, 2011 Jean-François DEL NERO
-//
-// This file is part of the HxCFloppyEmulator file selector.
-//
-// HxCFloppyEmulator file selector may be used and distributed without restriction
-// provided that this copyright statement is not removed from the file and that any
-// derivative work contains the original copyright notice and the associated
-// disclaimer.
-//
-// HxCFloppyEmulator file selector is free software; you can redistribute it
-// and/or modify  it under the terms of the GNU General Public License
-// as published by the Free Software Foundation; either version 2
-// of the License, or (at your option) any later version.
-//
-// HxCFloppyEmulator file selector is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-//   See the GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with HxCFloppyEmulator file selector; if not, write to the Free Software
-// Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-//
-*/
-///////////////////////////////////////////////////////////////////////////////////
-//-------------------------------------------------------------------------------//
-//-------------------------------------------------------------------------------//
-//-----------H----H--X----X-----CCCCC----22222----0000-----0000------11----------//
-//----------H----H----X-X-----C--------------2---0----0---0----0--1--1-----------//
-//---------HHHHHH-----X------C----------22222---0----0---0----0-----1------------//
-//--------H----H----X--X----C----------2-------0----0---0----0-----1-------------//
-//-------H----H---X-----X---CCCCC-----222222----0000-----0000----1111------------//
-//-------------------------------------------------------------------------------//
-//----------------------------------------------------- http://hxc2001.free.fr --//
-///////////////////////////////////////////////////////////////////////////////////
-// File : fectrl.c
-// Contains: SD HxC Floppy Emulator manager main routines (Amstrad CPC version).
-//
-// Written by:	Jean-François DEL NERO  (Jeff)
-//              Arnaud STORQ (Norecess)
-// Change History (most recent first):
-///////////////////////////////////////////////////////////////////////////////////
 
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+//#include <mint/osbind.h>
 #include <time.h>
+//#include <vt52.h>
 
 #include "cpcbioscall.h"
+
 #include "gui_utils.h"
 #include "cfg_file.h"
+
 #include "fat_opts.h"
 #include "fat_misc.h"
 #include "fat_defs.h"
 #include "fat_filelib.h"
-#include "fat_access.h"
-#include "sdhxcfloppyemu_directaccess.h"
+#define L_INDIAN(var) ((var&0x000000FF)<<24) |((var&0x0000FF00)<<8) |((var&0x00FF0000)>>8) |((var&0xFF000000)>>24)
 
-#define LFN_MAX_SIZE 74
-#define FL_STATUSTABLEN 32
+#define NUMBER_OF_FILE_ON_DISPLAY 10
+#define NUMBER_OF_SLOT 8
+
+typedef struct direct_access_status_sector_
+{
+	char DAHEADERSIGNATURE[8];
+	char FIRMWAREVERSION[12];
+	unsigned long lba_base;
+	unsigned char cmd_cnt;
+	unsigned char read_cnt;
+	unsigned char write_cnt;
+	unsigned char last_cmd_status;
+} direct_access_status_sector ;
+
+
+typedef struct direct_access_cmd_sector_
+{
+	char DAHEADERSIGNATURE[8];
+	unsigned char cmd_code;
+	unsigned char parameter_0;
+	unsigned char parameter_1;
+	unsigned char parameter_2;
+	unsigned char parameter_3;
+	unsigned char parameter_4;
+	unsigned char parameter_5;
+	unsigned char parameter_6;
+	unsigned char parameter_7;
+	unsigned char cmd_checksum;
+}direct_access_cmd_sector  ;
+
+#define LFN_MAX_SIZE 128
 
 typedef struct DirectoryEntry_ {
 	unsigned char name[12];
 	unsigned char attributes;
 	unsigned long firstCluster;
 	unsigned long size;
-	unsigned char longName[17];	// boolean
+	unsigned char longName[LFN_MAX_SIZE];	// boolean
 }DirectoryEntry;
 
 
-char selectorpos;
 unsigned char slotnumber;
 unsigned char floppydrive;
 
-char currentPath[256];
-char temp_buffer[257];
 unsigned char sector[512];
-unsigned char sdfecfg_file[512];
-
 DirectoryEntry DirectoryEntry_tab[NUMBER_OF_FILE_ON_DISPLAY];
+unsigned long browser_page_index_tab[255];
+unsigned char filename[257];
+disk_in_drive disks[2];
 disk_in_drive disks_slot_a[NUMBER_OF_SLOT];
+disk_in_drive disks_slot_b[NUMBER_OF_SLOT];
 
-struct fat_dir_entry sfEntry;
-struct fs_dir_list_status file_list_status;
-struct fs_dir_list_status file_list_status_tab[FL_STATUSTABLEN];
-struct fat_dir_entry sfEntry;
-struct fs_dir_ent dir_entry;
-
+FAT32_ShortEntry sfEntry;
 unsigned long last_setlbabase;
+unsigned char sdfecfg_file[2048];
+unsigned long cluster;
 
+unsigned short   floppyselector,floppyselectorindex;
+char selectorpos;
+
+long  entryindex,entryindex2,startentryindex,lastentryindex;
+unsigned char browser_page_index;
 unsigned char read_entry;
 unsigned char y_pos;
 
-const char mess_reboot[]="Rebooting...";
-const char mess_init[]="Initializing...                                                                 ";
-const unsigned char fpcfgbuffer[9] = {0x23, 0x00, 0xFF, 0x03, 0xAF, 0x02, 0x0A, 0x01, 0x03};
-static char filter[17];
-
-unsigned char g_step_sound;     //0x00 -> off 0xFF->on
-unsigned char g_ihm_sound;     //0x00 -> off 0xFF->on
-unsigned char g_back_light_tmr; //0x00 always off, 0xFF always on, other -> on x second
-unsigned char g_standby_tmr;    //0xFF disable, other -> on x second
-unsigned char g_buzzer_duty_cycle;
-unsigned char g_buzzer_step_duration;  // 0xD8 <> 0xFF
-
-
-/*void hxc_memcpy(void* d,void* s,unsigned short copyCount)
-{
-  unsigned short c;
-  unsigned char * dst;
-  unsigned char * src;
-
-  dst=(unsigned char *)d;
-  src=(unsigned char *)s;
-	c=0;
-	do
-	{
-
-		*dst=*src;
-		dst++;
-                src++;
-		c++;
-	}while(c<copyCount);
-}
-*/
+const char mess_reboot[]="    >>>>>Rebooting...<<<<<     ";
 
 /*
 unsigned long indexptr;
@@ -150,64 +108,52 @@ void print_hex(unsigned char * buffer, int size)
 
 unsigned char Flopwr( unsigned char * buffer,unsigned char diskdrive, unsigned char sector_id, unsigned char track, unsigned char count )
 {
-	unsigned char ret;
-	do
-	{
-		ret=write_sector(buffer,diskdrive,track,sector_id);
-		buffer=buffer+512;
-		count--;
-		sector_id++;
-	}while(count && !ret);
+  unsigned char ret;
+ do
+ {
+   ret=write_sector(buffer,diskdrive,track,sector_id);
+   buffer=buffer+512;
+   count--;
+   sector_id++;
+ }while(count && !ret);
 
-	return ret;
+ return ret;
 }
 
 unsigned char Floprd( unsigned char * buffer,unsigned char diskdrive, unsigned char sector_id, unsigned char track, unsigned char count )
 {
-	unsigned char ret;
+ unsigned char ret;
 
-	do
-	{
-		ret=read_sector(buffer,diskdrive,track,sector_id);
-		buffer=buffer+512;
-		count--;
-		sector_id++;
-	}while(count && !ret);
+ do
+ {
+   ret=read_sector(buffer,diskdrive,track,sector_id);
+   buffer=buffer+512;
+   count--;
+   sector_id++;
+ }while(count && !ret);
 
-	return ret;
+ return ret;
+
 }
 
-void strlwr(unsigned char * str)
-{
-  unsigned char i;
-  i=0;
-  while( str[i])
-  {
-         if( str[i]>='A' && str[i]<='Z')
-         {
-            str[i]=str[i]+ ('a'-'A');
-         }
-  }
-  
-}
+
 char setlbabase(unsigned long lba)
 {
 	char ret;
 	unsigned char * ptr;
 	direct_access_cmd_sector * dacs;
 
-	dacs=(direct_access_cmd_sector  *)sector;
+        dacs=(direct_access_cmd_sector  *)sector;
 
 	sprintf(dacs->DAHEADERSIGNATURE,"HxCFEDA");
 	dacs->cmd_code=1;
 
 	ptr=(unsigned char*)&lba;
-	dacs->parameter_0=*ptr++;
-	dacs->parameter_1=*ptr++;
-	dacs->parameter_2=*ptr++;
-	dacs->parameter_3=*ptr++;
+	dacs->parameter_0=ptr[0];
+	dacs->parameter_1=ptr[1];
+	dacs->parameter_2=ptr[2];
+	dacs->parameter_3=ptr[3];
 	dacs->parameter_4=0xA5;
-	dacs->parameter_5=0x00;
 
 	ret=Flopwr( sector, floppydrive, 0, 255, 1 );
 	return ret;
@@ -218,30 +164,46 @@ int media_init()
 {
 	unsigned char ret;
 	direct_access_status_sector * dass;
-	unsigned char ** ptr;
+	FL_FILE *file;
+        unsigned char ** ptr;
+        unsigned char fpcfgbuffer[9];
 
-	ptr=(unsigned char **)0xBE7D;
+        ptr=0xBE7D;
 
-	floppydrive=**ptr;
+        floppydrive=**ptr;
 
-	last_setlbabase=0xFFFFFF00;
+        last_setlbabase=0xFFFFFF00;
+        
+        fpcfgbuffer[0]=0x23;
+        fpcfgbuffer[1]=0x00;
 
-	cfg_disk_drive((unsigned char *)&fpcfgbuffer);
+        fpcfgbuffer[2]=0xFF;
+        fpcfgbuffer[3]=0x03;
 
+        fpcfgbuffer[4]=0xAF;
+        fpcfgbuffer[5]=0x02;
+        fpcfgbuffer[6]=0x0A;
+        fpcfgbuffer[7]=0x01;
+        fpcfgbuffer[8]=0x03;
+        cfg_disk_drive((unsigned char *)&fpcfgbuffer);
+        
 
 	ret=Floprd((unsigned char*)&sector, floppydrive, 0, 255, 1 );
+
 	if(!ret)
 	{
 		dass=(direct_access_status_sector *)sector;
 		if(!strcmp(dass->DAHEADERSIGNATURE,"HxCFEDA"))
 		{
-			hxc_printf(FIRMWARE_VERSION_X_POS,FIRMWARE_VERSION_Y_POS,"- Firmware %s - 'H' for help" ,dass->FIRMWAREVERSION);
-			return 1;
+                    hxc_printf(0,0,200-30,"Firmware %s" ,dass->FIRMWAREVERSION);
+                    return 1;
 		}
 
-		hxc_printf_box_error("Bad signature - HxC Floppy Emulator not found!");
+ 	        hxc_printf_box("Bad signature - HxC Floppy Emulator not found!");
+
+		return 0;
 	}
-	hxc_printf_box_error("ERROR: Floppy Access error!  [%d]",ret);
+	hxc_printf_box("ERROR: Floppy Access error!  [%d]",ret);
 
 	return 0;
 }
@@ -252,31 +214,31 @@ int media_read(unsigned long lba_sector, unsigned char *buffer)
 	unsigned char ret;
 	unsigned long diff;
 
-	hxc_fastprintf(76,0,"READ");
+	hxc_printf(0,8*79,0,"%c",23);
 
-	diff=lba_sector-last_setlbabase;
+        diff=lba_sector-last_setlbabase;
 
-	if(diff<8)
-	{
-		ret=Floprd( (unsigned char*)buffer, floppydrive, (diff)+1, 255, 1 );
-	}
-	else
-	{
-		setlbabase(lba_sector);
-		ret=Floprd( (unsigned char*)buffer, floppydrive, 1, 255, 1 );
-		last_setlbabase=lba_sector;
-	}
+        if(diff<8)
+        {
+          ret=Floprd( (unsigned char*)buffer, floppydrive, (diff)+1, 255, 1 );
+        }
+        else
+        {
+          setlbabase(lba_sector);
+          ret=Floprd( (unsigned char*)buffer, floppydrive, 1, 255, 1 );
+          last_setlbabase=lba_sector;
+        }
 
-	if(!ret)
-	{
-		hxc_fastprintf(76,0,"    ");
-		return 1;
-	}
-	else
-	{
-		hxc_printf_box_error("ERROR: Floppy Write Access error!  [%d:%d]",floppydrive,ret);
-		return 0;
-	}
+        if(!ret)
+        {
+         hxc_printf(0,8*79,0," ");
+         return 1;
+        }
+        else
+        {
+         hxc_printf_box("ERROR: Floppy Write Access error!  [%d:%d]",floppydrive,ret);
+         for(;;);
+        }
 }
 
 int media_write(unsigned long lba_sector, unsigned char *buffer)
@@ -284,670 +246,462 @@ int media_write(unsigned long lba_sector, unsigned char *buffer)
 	unsigned long diff;
 	unsigned char ret;
 
-	hxc_fastprintf(75,0,"WRITE");
+	hxc_printf(0,8*79,0,"%c",23);
 
-	diff=lba_sector-last_setlbabase;
+        diff=lba_sector-last_setlbabase;
 
-	if(diff<8)
-	{
-		ret=Flopwr( (unsigned char*)buffer, floppydrive, (diff)+1, 255, 1 );
-	}
-	else
-	{
-		setlbabase(lba_sector);
-		ret=Flopwr( (unsigned char*)buffer, floppydrive, 1, 255, 1 );
-		last_setlbabase=lba_sector;
-	}
-	
-	if(!ret)
-	{
-		hxc_fastprintf(75,0,"     ");
-		return 1;
-	}
+        if(diff<8)
+        {
+          ret=Flopwr( (unsigned char*)buffer, floppydrive, (diff)+1, 255, 1 );
+        }
+        else
+        {
+          setlbabase(lba_sector);
+          ret=Flopwr( (unsigned char*)buffer, floppydrive, 1, 255, 1 );
+          last_setlbabase=lba_sector;
+        }
 
-	hxc_printf_box_error("ERROR: Floppy Write Access error!  [%d]",ret);
-	return 0;
+
+        if(!ret)
+        {
+         hxc_printf(0,8*79,0," ");
+         return 1;
+        }
+        else
+        {
+         hxc_printf_box("ERROR: Floppy Write Access error!  [%d]",ret);
+         for(;;);
+        }
+
 }
 
-void show_all_slots(void)
+void lockup()
 {
-	char tmp_str[17];
-	int i;
-
-	for ( i = 1; i < NUMBER_OF_SLOT; i++ )
-	{
-		if( disks_slot_a[i].DirEnt.size)
-		{
-			memcpy(tmp_str,disks_slot_a[i].DirEnt.longName,16);
-			tmp_str[16]=0;
-		}
-		else
-		{
-			tmp_str[0]=0;
-		}
-		hxc_printf(0,ALLSLOTS_Y_POS + i,"Slot %d: %s", i, tmp_str);
-	}
-
-	hxc_printf(0,ALLSLOTS_Y_POS + NUMBER_OF_SLOT + 1,"Press a key...");
-	wait_key();
+	for(;;);
 }
 
 void printslotstatus(unsigned char slotnumber,  disk_in_drive * disks)
 {
-	char tmp_str[17];
+   char tmp_str[17];
+   #define SLOT_Y_POS 100
+    hxc_printf(0,0,SLOT_Y_POS,"Slot %.2d:", slotnumber);
 
-	clear_line(SLOT_Y_POS);
+    clear_line(SLOT_Y_POS+8,0);
+    hxc_printf(0,0,SLOT_Y_POS+8,"Drive A:");
+    if( disks[0].DirEnt.size)
+    {
+        memcpy(tmp_str,disks[0].DirEnt.longName,16);
+        tmp_str[16]=0;
+	hxc_printf(0,0,SLOT_Y_POS+8,"Drive A: %s", tmp_str);
+     }
 
-	if( disks[0].DirEnt.size)
-	{
-		memcpy(tmp_str,disks[0].DirEnt.longName,16);
-		tmp_str[16]=0;
-	}
-	else
-	{
-		tmp_str[0]=0;
-	}
-	hxc_printf(0,SLOT_Y_POS,"Slot %d: %s", slotnumber, tmp_str);
+    clear_line(SLOT_Y_POS+16,0);
+    hxc_printf(0,0,SLOT_Y_POS+16,"Drive B:");
+    if(disks[1].DirEnt.size)
+    {
+        memcpy(tmp_str,disks[1].DirEnt.longName,16);
+        tmp_str[16]=0;
+	hxc_printf(0,0,SLOT_Y_POS+16,"Drive B: %s", tmp_str);
+    }
 }
 
 
-char read_cfg_file(unsigned char * sdfecfg_file)
-{
-	char ret;
-	unsigned char number_of_slot;
-	unsigned short i;
-	cfgfile * cfgfile_ptr;
-	FL_FILE *file;
-
-	memset((void*)&disks_slot_a,0,sizeof(disk_in_drive)*NUMBER_OF_SLOT);
-
-	ret=0;
-	file = fl_fopen("/HXCSDFE.CFG", "r");
-	if (file)
-	{
-		cfgfile_ptr=(cfgfile * )sdfecfg_file;
-
-		fl_fread(sdfecfg_file, 1, 512 , file);
-		number_of_slot=cfgfile_ptr->number_of_slot;
-
-		g_step_sound = cfgfile_ptr->step_sound;     //0x00 -> off 0xFF->on
-		g_ihm_sound = cfgfile_ptr->ihm_sound;     //0x00 -> off 0xFF->on
-		g_back_light_tmr = cfgfile_ptr->back_light_tmr; //0x00 always off, 0xFF always on, other -> on x second
-		g_standby_tmr = cfgfile_ptr->standby_tmr;    //0xFF disable, other -> on x second
-		g_buzzer_duty_cycle = cfgfile_ptr->buzzer_duty_cycle;
-		g_buzzer_step_duration = cfgfile_ptr->buzzer_step_duration;  // 0xD8 <> 0xFF    		
-
-		fl_fseek(file , 1024 , SEEK_SET);
-
-		fl_fread(sdfecfg_file, 1, 512 , file);
-		i=1;
-		do
-		{
-			if(!(i&3))
-			{
-				fl_fread(sdfecfg_file, 1, 512 , file);
-			}
-
-			memcpy(&disks_slot_a[i],&sdfecfg_file[(i&3)*128],sizeof(disk_in_drive));
-			i++;
-		}while(i<number_of_slot);
-
-		fl_fclose(file);
-	}
-	else
-	{
-		ret=1;
-	}
-
-	if(ret)
-	{
-		hxc_printf_box_error("ERROR: Access HXCSDFE.CFG file failed! [%d]",ret);
-	}
-
-	return ret;
-}
 
 char save_cfg_file(unsigned char * sdfecfg_file)
 {
-	unsigned char number_of_slot,slot_index;
-	unsigned char i,sect_nb,ret;
+        unsigned short i,j,k;
 	cfgfile * cfgfile_ptr;
-	unsigned short  floppyselectorindex;
+	short   floppyselector,floppyselectorindex;
+	disk_in_drive * disk_ptr;
 	FL_FILE *file;
 
-        ret=0;
-	file = fl_fopen("/HXCSDFE.CFG", "r");
-	if (file)
+	cfgfile_ptr=(cfgfile * )sdfecfg_file;
+	cfgfile_ptr->number_of_slot=1;
+	cfgfile_ptr->slot_index=1;
+
+        i=0;
+        j=(512*2) + 128;
+
+        do
 	{
-		number_of_slot=1;
-		slot_index=1;
-		i=1;
+             floppyselector=i+1;
+	     floppyselectorindex=(floppyselector<<7)+(2*512);
+	     disk_ptr=(disk_in_drive *)&sdfecfg_file[floppyselectorindex];
+	     if( disk_ptr->DirEnt.size)
+	     {
+		cfgfile_ptr->number_of_slot++;
+		memcpy(&sdfecfg_file[j],&sdfecfg_file[floppyselectorindex],128);
+		j=j+128;
+	     }
+	     i++;
+	}while(i<(NUMBER_OF_SLOT-1));
 
-		floppyselectorindex=128;                      // Fisrt slot offset
-		memset( sdfecfg_file,0,512);                  // Clear the sector
-		sect_nb=2;                                    // Slots Sector offset
+        j=(512*2) + (cfgfile_ptr->number_of_slot*128);
+        memset(&sdfecfg_file[j],0,2048-j);
 
-		do
-		{
-			if( disks_slot_a[i].DirEnt.size)            // Valid slot found
-			{
-				// Copy it to the actual file sector
-				memcpy(&sdfecfg_file[floppyselectorindex],&disks_slot_a[i],sizeof(disk_in_drive));
 
-				//Next slot...
-				number_of_slot++;
-				floppyselectorindex=(floppyselectorindex+128)&0x1FF;
-
-				if(!(number_of_slot&0x3))                // Need to change to the next sector
-				{
-					// Save the sector
-					if (fl_fswrite((unsigned char*)sdfecfg_file, 1,sect_nb, file) != 1)
-					{
-						hxc_printf_box_error("ERROR: Write file failed!");
-                            			ret=1;
-					}
-					// Next sector
-					sect_nb++;
-					memset( sdfecfg_file,0,512);                  // Clear the next sector
-				}
-			}
-
-			i++;
-		}while(i<NUMBER_OF_SLOT);
-
-		if(number_of_slot&0x3)
-		{
-			if (fl_fswrite((unsigned char*)sdfecfg_file, 1,sect_nb, file) != 1)
-			{
-				hxc_printf_box_error("ERROR: Write file failed!");
-				ret=1;
-			}
+        if(cfgfile_ptr->slot_index>=cfgfile_ptr->number_of_slot)
+        {
+           cfgfile_ptr->slot_index=cfgfile_ptr->number_of_slot-1;
         }
 
-		if(slot_index>=number_of_slot)
+
+        file = fl_fopen("/HXCSDFE.CFG", "r");
+	if (file)
+	{
+		// Write some data
+		if (fl_fswrite((unsigned char*)sdfecfg_file, 2048/512, file) != 2048/512)
 		{
-			slot_index=number_of_slot-1;
-		}
-
-		fl_fseek(file , 0 , SEEK_SET);
-
-		// Update the file header
-		fl_fread(sdfecfg_file, 1, 512 , file);
-
-		cfgfile_ptr=(cfgfile * )sdfecfg_file;
-		cfgfile_ptr->number_of_slot=number_of_slot;
-		cfgfile_ptr->slot_index=slot_index;
-
-		cfgfile_ptr->step_sound = g_step_sound;     //0x00 -> off 0xFF->on
-		cfgfile_ptr->ihm_sound = g_ihm_sound;     //0x00 -> off 0xFF->on
-		cfgfile_ptr->back_light_tmr = g_back_light_tmr; //0x00 always off, 0xFF always on, other -> on x second
-		cfgfile_ptr->standby_tmr = g_standby_tmr;    //0xFF disable, other -> on x second
-		cfgfile_ptr->buzzer_duty_cycle = g_buzzer_duty_cycle;
-		cfgfile_ptr->buzzer_step_duration = g_buzzer_step_duration;  // 0xD8 <> 0xFF
-
-		if (fl_fswrite((unsigned char*)sdfecfg_file, 1,0, file) != 1)
-		{
-			hxc_printf_box_error("ERROR: Write file failed!");
-			ret=1;
-		}
+                      	restore_box();
+                        hxc_printf_box("ERROR: Write file failed !");
+                        lockup();
+                }
+                
+                 //print_hex(sdfecfg_file, 2048);
 
 	}
 	else
-	{
-		hxc_printf_box_error("ERROR: Create file failed!");
-		ret=1;
-	}
-	// Close file
+        {
+                restore_box();
+                hxc_printf_box("ERROR: Create file failed !");
+                lockup();
+        }
+        // Close file
 	fl_fclose(file);
-
-	return ret;
 }
 
 
 void clear_list()
 {
-	unsigned char y_pos,i;
+  unsigned char y_pos,i;
+  
+  y_pos=16;
 
-	//clear_line(24);
+ for(i=0;i<NUMBER_OF_FILE_ON_DISPLAY;i++)
+ {
+        clear_line(y_pos,0);
+        y_pos=y_pos+8;
+ }
 
-	y_pos=FILELIST_Y_POS;
-
-	for(i=0;i<NUMBER_OF_FILE_ON_DISPLAY;i++)
-	{
-        clear_line(y_pos);
-        y_pos++;
-	}
 }
 
 
 void next_slot()
 {
-	slotnumber++;
-	if(slotnumber>(NUMBER_OF_SLOT-1))   slotnumber=1;
-	printslotstatus(slotnumber, (disk_in_drive *) &disks_slot_a[slotnumber]) ;
+
+    slotnumber++;
+    if(slotnumber>(NUMBER_OF_SLOT-1))   slotnumber=1;
+    floppyselector=slotnumber;
+    floppyselectorindex=(floppyselector<<7)+(2*512);
+    memcpy((void*)&disks[0],(void*)&sdfecfg_file[floppyselectorindex],sizeof(disk_in_drive));
+    memcpy((void*)&disks[1],(void*)&sdfecfg_file[(floppyselectorindex)+64],sizeof(disk_in_drive));
+
+    printslotstatus(slotnumber, (disk_in_drive *) &disks) ;
 }
 
-void displayFolder()
+
+void enter_sub_dir(unsigned long first_cluster)
 {
-	clear_line( PATH_Y_POS );
-	hxc_fastprintf( 0, PATH_Y_POS, "Directory:" );
-	hxc_fastprintf( 11, PATH_Y_POS, currentPath );
+
+ cluster=ENDIAN_32BIT(first_cluster);
+ if(!cluster) cluster=get_root_cluster();
+ selectorpos=0;
+ startentryindex=-1;
+ lastentryindex=-1;
+ browser_page_index=0;
+ entryindex2=-1;
+ entryindex=0;
+ clear_list();
+ read_entry=1;
 }
-
-void backup_flstatus(unsigned char fl_index)
-{
-		unsigned char * src;
-		unsigned char * dst;
-		unsigned char i;
-
-		dst=(unsigned char*)&file_list_status_tab[fl_index&(FL_STATUSTABLEN-1)];
-		src=(unsigned char*)&file_list_status;
-
-		for(i=0;i<sizeof(struct fs_dir_list_status);i++)
-		{
-			dst[i]=src[i];
-		}
-		//memcpy(&file_list_status_tab[fl_index&(FL_STATUSTABLEN-1)],&file_list_status ,sizeof(struct fs_dir_list_status));
-}
-
-
-void restore_flstatus(unsigned char fl_index)
-{
-		unsigned char * src;
-		unsigned char * dst;
-		unsigned char i;
-
-		src=(unsigned char*)&file_list_status_tab[fl_index&(FL_STATUSTABLEN-1)];
-		dst=(unsigned char*)&file_list_status;
-
-		for(i=0;i<sizeof(struct fs_dir_list_status);i++)
-		{
-			dst[i]=src[i];
-		}
-		//memcpy(&file_list_status,&file_list_status_tab[fl_index&(FL_STATUSTABLEN-1)],sizeof(struct fs_dir_list_status));
-}
-
-void enter_sub_dir(disk_in_drive *disk_ptr)
-{
-	unsigned char currentPathLength;
-	unsigned char c,i,j;
-
-	currentPathLength = strlen( currentPath );
-	if (currentPathLength && (disk_ptr->DirEnt.longName[0] == (unsigned char)'.') && (disk_ptr->DirEnt.longName[1] == (unsigned char)'.') )
-	{
-		currentPath[ currentPathLength-1 ]=0;
-		while (currentPathLength && currentPath[ currentPathLength-1 ] != (unsigned char)'/')
-		{
-			currentPath[ currentPathLength-1 ] = 0;
-			currentPathLength--;
-		}
-	}
-	else
-	{
-		if((disk_ptr->DirEnt.longName[0] != (unsigned char)'.'))
-		{
-
-			j=strlen( currentPath );
-			i=0;
-			c = disk_ptr->DirEnt.longName[i];
-			while(( c >= (32+1) ) && (c <= 127))
-			{
-				currentPath[j+i]=c;
-				i++;
-				c = disk_ptr->DirEnt.longName[i];
-			}
-			currentPath[j+i]='/';
-			currentPath[j+i+1]=0;
-		}
-	}
-
-	displayFolder();
-	selectorpos=0;
-
-	fl_list_opendir(currentPath, &file_list_status);
-	for(i=0;i<FL_STATUSTABLEN;i++)
-	{
-		backup_flstatus(i);
-	}
- 	clear_list();
-	read_entry=1;
-}
-
 
 
 int main(int argc, char* argv[])
 {
-	unsigned char i,ret;
-	char key;
-	char numFiles;
-	unsigned char page_number,filtermode,displayentry,last_file;
-	char endOfPage;
-	disk_in_drive * disk_ptr;
 
-	init_display();
-	/*Initialise media*/
-	hxc_printf_box(mess_init);
+  unsigned char i,ret;
+  FL_FILE *file;
+  unsigned char key,entrytype;
+  disk_in_drive * disk_ptr;
 
-	if(media_init())
-	{
-		// Initialise File IO Library
+
+  init_display();
+  /*Initialise media*/
+  hxc_printf_box("Init SD HxC Floppy Emulator...");
+
+  if(media_init())
+  {
+        	// Initialise File IO Library
 		fl_init();
 
-		hxc_printf_box("Mounting SDCard...");
+                hxc_printf_box("       Mounting SDCard...     ");
 
 		// Attach media access functions to library
 		if (fl_attach_media(media_read, media_write) != FAT_INIT_OK)
 		{
-			hxc_printf_box("ERROR: Can not attach media!");
+                  for(;;);
+                }
+                hxc_printf_box("     Reading HXCSDFE.CFG ...  ");
+
+                ret=0;
+		file = fl_fopen("/HXCSDFE.CFG", "r");
+		if (file)
+		{
+			if (fl_fread(sdfecfg_file, 1, 2048, file) != 2048)
+			{
+                              ret=2;
+			}
+			fl_fclose(file);
 		}
-		hxc_printf_box("Reading HXCSDFE.CFG...");
+		else
+		{
+                  ret=1;
+		}
 
-		ret=0;
+                if(ret)
+                {
+              		hxc_printf_box("ERROR: Access HXCSDFE.CFG file failed ! [%d]",ret);
+			for(;;);
+                }
 
-		read_cfg_file(sdfecfg_file);
+                slotnumber=1;
 
-		memset(currentPath,0,256);
-		currentPath[0]='/';
+		floppyselector=slotnumber;
+		floppyselectorindex=(floppyselector<<7)+(2*512);
 
-		displayFolder();
+                memset((void*)&disks[0],0,sizeof(disk_in_drive));
+                memset((void*)&disks[1],0,sizeof(disk_in_drive));
 
-		slotnumber=1;
-		printslotstatus(slotnumber, (disk_in_drive *) &disks_slot_a[slotnumber]) ;
+		memcpy((void*)&disks[0],(void*)&sdfecfg_file[floppyselectorindex],sizeof(disk_in_drive));
+		memcpy((void*)&disks[1],(void*)&sdfecfg_file[(floppyselectorindex)+64],sizeof(disk_in_drive));
 
-		clear_list();
+                printslotstatus(slotnumber, (disk_in_drive *) &disks) ;
 
-		i=0;
-		do{
-			init_key(i);
-			i++;
-		}while(i);
+                clear_list();
 
-		read_entry=0;
+                i=0;
+                do{
+                init_key(i);
+                i++;
+                }while(i);
+
+                read_entry=0;
 		selectorpos=0;
-		page_number=0;
-		last_file=0;
-		filtermode=0;
-
-		fl_list_opendir(currentPath, &file_list_status);
-		for(i=0;i<FL_STATUSTABLEN;i++) backup_flstatus(i);
-
+		browser_page_index=0;
+		cluster=get_root_cluster();
 		for(;;)
 		{
-			y_pos=FILELIST_Y_POS;
-
+			entryindex2=-1;
+			entryindex=0;
+			y_pos=16;
+			startentryindex=-1;
+			lastentryindex=-1;
+			browser_page_index=0;
 			for(;;)
 			{
+       				entryindex2=startentryindex;
 				i=0;
+				y_pos=16;
 				do
 				{
-					memset(&DirectoryEntry_tab[i],0,sizeof(DirectoryEntry));
+					entryindex=entryindex2;
+					entryindex2=fl_change_entry(cluster,1,entryindex,&sfEntry,filename);
+                                        if(!i)
+                                        {
+                                          browser_page_index_tab[browser_page_index]= entryindex;
+                                        }
+					if(entryindex2!=entryindex)
+					{
+
+                                                entrytype=12;
+                                                if(sfEntry.Attr&FILE_ATTR_DIRECTORY)   entrytype=10;
+
+						hxc_printf(0,0,y_pos," %c%s",entrytype,filename);
+						y_pos=y_pos+8;
+						if(strlen(filename))
+						memcpy(DirectoryEntry_tab[i].name,filename,11);
+						else
+						memcpy(DirectoryEntry_tab[i].name,sfEntry.Name,11);
+
+
+						DirectoryEntry_tab[i].name[11]=0;
+						sprintf(DirectoryEntry_tab[i].longName,filename);
+						DirectoryEntry_tab[i].attributes=sfEntry.Attr;
+						DirectoryEntry_tab[i].firstCluster =  ENDIAN_32BIT((((unsigned long)ENDIAN_16BIT(sfEntry.FstClusHI))<<16) + ENDIAN_16BIT(sfEntry.FstClusLO));
+						DirectoryEntry_tab[i].size =  ENDIAN_32BIT(ENDIAN_32BIT(sfEntry.FileSize));
+					}
+
 					i++;
-				}while((i<NUMBER_OF_FILE_ON_DISPLAY));
+				}while((i<NUMBER_OF_FILE_ON_DISPLAY) && entryindex2!=entryindex);
 
-				i=0;
-				y_pos=FILELIST_Y_POS;
-				numFiles = 0;
-				last_file=0;
-				do
+				lastentryindex= entryindex2;
+				hxc_printf(0,0,16+(selectorpos*8),">");
+				invert_line(16+(selectorpos*8));
+
+                               read_entry=0;
+                                do
 				{
-					displayentry=0xFF;
-					if(fl_list_readdir(&file_list_status, &dir_entry))
-					{
-						if(filtermode)
-						{
-							strlwr(dir_entry.filename);
-
-							if(!strstr(dir_entry.filename,filter))
-							{
-								displayentry=0x00;
-							}
-						}
-
-						if(displayentry)
-						{
-
-							memcpy(DirectoryEntry_tab[i].longName,dir_entry.filename,16);
-							DirectoryEntry_tab[i].longName[16]=0;
-
-							//memcpy(DirectoryEntry_tab[i].name,dir_entry.filename,12);
-							//DirectoryEntry_tab[i].name[12-1]=0;
-
-							dir_entry.filename[74]=0;
-							if(dir_entry.is_dir)
-							{
-								hxc_printf(0,y_pos,"<DIR> %s",dir_entry.filename);
-								DirectoryEntry_tab[i].attributes=0x10;
-							}
-							else
-							{
-								hxc_printf(0,y_pos,"      %s",dir_entry.filename);
-								DirectoryEntry_tab[i].attributes=0x00;
-							}
-
-							y_pos++;
-							numFiles++;
-						
-							DirectoryEntry_tab[i].firstCluster = ENDIAN_32BIT(dir_entry.cluster) ;
-							DirectoryEntry_tab[i].size =  ENDIAN_32BIT(dir_entry.size);
-
-							i++;
-						}
-					}
-					else
-					{
-						last_file=0xFF;
-						i=NUMBER_OF_FILE_ON_DISPLAY;
-					}
-
-				}while(i<NUMBER_OF_FILE_ON_DISPLAY);
-
-				backup_flstatus(page_number+1);
-
-				if ( selectorpos > (numFiles-1) )
-				{
-					selectorpos = numFiles-1;					
-					if ( selectorpos < 0 )
-					{
-						selectorpos = 0;
-					}
-				}
-
-				//hxc_fastprintf(0,FILELIST_Y_POS+(selectorpos),">");
-				invert_line(FILELIST_Y_POS+(selectorpos));
-
-				read_entry=0;
-				do
-				{
-					key=wait_key();
+                                        key=wait_key();
 					if(1)
 					{
-						//hxc_printf(0,0,"%.8X",key);
+						//hxc_printf(0,0,0,"%.8X",key);
 
-						switch(key)
+                                        	switch(key)
 						{
 						case 0: // UP
-							if ( ((selectorpos > 0)&&(page_number==0))||
-								(page_number))
-							{
-								invert_line(FILELIST_Y_POS+(selectorpos));
-								//hxc_fastprintf(0,FILELIST_Y_POS+(selectorpos)," ");
+							invert_line(16+(selectorpos*8));
+							hxc_printf(0,0,16+(selectorpos*8)," ");
 
-								selectorpos--;
-								if(selectorpos<0)
-								{
-									clear_list();
-									selectorpos=NUMBER_OF_FILE_ON_DISPLAY-1;
-									page_number--;
-									clear_list();
-									read_entry=1;
-									restore_flstatus(page_number);
-								}
-								else
-								{
-									//hxc_fastprintf(0,FILELIST_Y_POS+(selectorpos),">");
-									invert_line(FILELIST_Y_POS+(selectorpos));
-								}
-							}
+							selectorpos--;
+							if(selectorpos<0)
+                                                        {
+                                                          selectorpos=NUMBER_OF_FILE_ON_DISPLAY-1;
+                                                        if(browser_page_index) browser_page_index--;
+							startentryindex=browser_page_index_tab[browser_page_index];//startentryindex-16;
+							if(  startentryindex<-1) startentryindex=-1;
+                                                        clear_list();
+
+							read_entry=1;
+                                                        }
+                                                        else
+                                                        {
+
+							hxc_printf(0,0,16+(selectorpos*8),">");
+							invert_line(16+(selectorpos*8));
+                                                        }
 							break;
 						case 2: // Down
-							if ( (selectorpos < (numFiles-1)) || ((selectorpos>=(NUMBER_OF_FILE_ON_DISPLAY-1))) )
-							{
-								invert_line(FILELIST_Y_POS+(selectorpos));
-								//hxc_fastprintf(0,FILELIST_Y_POS+(selectorpos)," ");
-								selectorpos++;
-								if(selectorpos>=NUMBER_OF_FILE_ON_DISPLAY)
-								{
-									if(last_file)
-									{
-										invert_line(FILELIST_Y_POS+(selectorpos));
-									}
-									else
-									{
-										selectorpos=0;
-										clear_list();
-										read_entry=1;
-										page_number++;
-										restore_flstatus(page_number);
-									}
-								}
-								else
-								{
-									//hxc_fastprintf(0,FILELIST_Y_POS+(selectorpos),">");
-									invert_line(FILELIST_Y_POS+(selectorpos));
-								}
-							}
+							invert_line(16+(selectorpos*8));
+							hxc_printf(0,0,16+(selectorpos*8)," ");
 
+							selectorpos++;
+							if(selectorpos>=NUMBER_OF_FILE_ON_DISPLAY)
+                                                        {
+                                                          selectorpos=0;
+                                                          if(browser_page_index<(sizeof(browser_page_index_tab)/4)) browser_page_index++;
+
+    							  startentryindex=lastentryindex;//+1;
+    							  if(  startentryindex<-1) startentryindex=-1;
+                                                        clear_list();
+
+							read_entry=1;
+                                                        }
+                                                        else
+                                                        {
+							hxc_printf(0,0,16+(selectorpos*8),">");
+							invert_line(16+(selectorpos*8));
+                                                        }
+
+							break;
+						case 5:
+							startentryindex=-1;
 							break;
 						case 1: // Right
-							if(!last_file)
-							{
-								clear_list();
-								read_entry=1;
-								page_number++;
-								restore_flstatus(page_number);
-							}
+							startentryindex=lastentryindex;
+                                                        if(browser_page_index<(sizeof(browser_page_index_tab)/4)) browser_page_index++;
+							if(  startentryindex<-1) startentryindex=-1;
+                                                        clear_list();
+							read_entry=1;
+							break;
+						case 8:
+						        if(browser_page_index) browser_page_index--;
+
+							startentryindex=browser_page_index_tab[browser_page_index];
+							if(  startentryindex<-1) startentryindex=-1;
+                                                        clear_list();
+							read_entry=1;
 							break;
 
-						case 7: // .
-							if(page_number!=0) 
-							{
-								selectorpos=0;
-								page_number=0;
-								restore_flstatus(page_number);
-								clear_list();
-								read_entry=1;
-							}
-							break;
-
-						case 8: // left
-							if(page_number!=0) 
-							{
-								page_number--;
-								restore_flstatus(page_number);
-								clear_list();
-								read_entry=1;
-							}
-							break;
 
 						case 14:
-							next_slot();
+                                                        next_slot();
+							break;
+
+						case 10:
+                                                	hxc_printf_box("Saving selection...");
+                                                	save_cfg_file(sdfecfg_file);
+                                                       	restore_box();
+                                                        clear_list();
+							read_entry=1;
 							break;
 
 						case 15:
-							disk_ptr=(disk_in_drive * )&DirectoryEntry_tab[selectorpos];
+                                                         disk_ptr=(disk_in_drive * )&DirectoryEntry_tab[selectorpos];
 
-							if(disk_ptr->DirEnt.attributes&0x10)
-							{
-								enter_sub_dir(disk_ptr);
-							}
-							else
-							{
-								memcpy((void*)&disks_slot_a[slotnumber],(void*)&DirectoryEntry_tab[selectorpos],sizeof(disk_in_drive));
-								printslotstatus(slotnumber, (disk_in_drive *) &disks_slot_a[slotnumber]) ;
-							}
+						        if(disk_ptr->DirEnt.attributes&0x10)
+						        {
+                                                             enter_sub_dir(disk_ptr->DirEnt.firstCluster);
+                                                        }
+                                                        else
+                                                        {
+							memcpy((void*)&sdfecfg_file[floppyselectorindex],(void*)&DirectoryEntry_tab[selectorpos],sizeof(disk_in_drive));
+							memcpy((void*)&disks[0],(void*)&sdfecfg_file[(floppyselectorindex)],sizeof(disk_in_drive));
+
+                                		        printslotstatus(slotnumber, (disk_in_drive *) &disks) ;
+                  		                      }
 							break;
 
-						case 47:
-						case 18:
-						case 6:
-							disk_ptr=(disk_in_drive * )&DirectoryEntry_tab[selectorpos];
+						 case 47:
+                                                 case 18:
+	                                         case 6:
+                                                         disk_ptr=(disk_in_drive * )&DirectoryEntry_tab[selectorpos];
 
-							if(disk_ptr->DirEnt.attributes&0x10)
-							{
-								enter_sub_dir(disk_ptr);
-							}
-							else
-							{
-								memcpy((void*)&disks_slot_a[slotnumber],(void*)&DirectoryEntry_tab[selectorpos],sizeof(disk_in_drive));
-								next_slot();
-							}
+						        if(disk_ptr->DirEnt.attributes&0x10)
+						        {
+                                                            enter_sub_dir(disk_ptr->DirEnt.firstCluster);
+                                                        }
+                                                        else
+                                                        {
+  							     memcpy((void*)&sdfecfg_file[floppyselectorindex],(void*)&DirectoryEntry_tab[selectorpos],sizeof(disk_in_drive));
+                                                             memcpy((void*)&disks[0],(void*)&sdfecfg_file[(floppyselectorindex)],sizeof(disk_in_drive));
+  
+                                                             next_slot();
+                  		                      }
+							break;
+						case 7:
+                                                        disk_ptr=(disk_in_drive * )&DirectoryEntry_tab[selectorpos];
+
+						        if(disk_ptr->DirEnt.attributes&0x10)
+						        {
+                                                          enter_sub_dir(disk_ptr->DirEnt.firstCluster);
+                                                        }
+                                                        else
+                                                        {
+
+							memcpy((void*)&sdfecfg_file[floppyselectorindex+64],(void*)&DirectoryEntry_tab[selectorpos],sizeof(disk_in_drive));
+							memcpy((void*)&disks[1],(void*)&sdfecfg_file[(floppyselectorindex)+64],sizeof(disk_in_drive));
+
+                                		        printslotstatus(slotnumber, (disk_in_drive *) &disks) ;
+                                		                      }
+							break;
+                                                case 16:
+                                                case 13:
+                                                      memset((void*)&sdfecfg_file[floppyselectorindex],0,128);
+						      memset((void*)&disks,0,sizeof(disk_in_drive)*2);
+
+                               		              printslotstatus(slotnumber, (disk_in_drive *) &disks) ;
+                                                break;
+
+                                                case 79:
+                                                      memset((void*)&sdfecfg_file[floppyselectorindex],0,128);
+						      memset((void*)&disks,0,sizeof(disk_in_drive)*2);
+
+                                                      next_slot();
+                                                break;
+                                               	case 3:
+                                                	hxc_printf_box("Saving selection and restart...");
+                                                	save_cfg_file(sdfecfg_file);
+                                                       	restore_box();
+                                   			hxc_printf_box((char*)&mess_reboot);
+                                   			move_to_track(0);
+                                   			reboot();
 							break;
 
-						case 60: // s key
-							clear_list();
-							clear_line(SLOT_Y_POS);
-							clear_line(PATH_Y_POS);
-							clear_line(PATH_Y_POS+1);
-							show_all_slots();
-							displayFolder();
-							clear_line(PATH_Y_POS+1);
-							clear_list();
-							read_entry=1;
-							restore_flstatus(page_number);
-							printslotstatus(slotnumber, (disk_in_drive *) &disks_slot_a[slotnumber]) ;
-							break;
-
-						case 44: // h key
-							clear_list();
-							clear_line(SLOT_Y_POS);
-							clear_line(PATH_Y_POS);
-							clear_line(PATH_Y_POS+1);
-							show_help();
-							displayFolder();
-							clear_line(PATH_Y_POS+1);
-							clear_list();
-							read_entry=1;
-							restore_flstatus(page_number);
-							printslotstatus(slotnumber, (disk_in_drive *) &disks_slot_a[slotnumber]) ;
-							break;
-
-						case 54: // p key
-							clear_list();
-							clear_line(SLOT_Y_POS);
-							clear_line(PATH_Y_POS);
-							clear_line(PATH_Y_POS+1);
-							show_parameters();
-							displayFolder();
-							clear_line(PATH_Y_POS+1);
-							clear_list();
-							restore_flstatus(page_number);
-							read_entry=1;
-							printslotstatus(slotnumber, (disk_in_drive *) &disks_slot_a[slotnumber]) ;
-							break;
-
-						case 16:
-						case 13:
-							memset((void*)&disks_slot_a[slotnumber],0,sizeof(disk_in_drive));
-							printslotstatus(slotnumber, (disk_in_drive *) &disks_slot_a[slotnumber]) ;
-							break;
-
-						case 79:
-							memset((void*)&disks_slot_a[slotnumber],0,sizeof(disk_in_drive));
-							next_slot();
-							break;
-						case 3:
-							hxc_printf_box("Writing info...");
-							save_cfg_file(sdfecfg_file);
-							hxc_printf_box((char*)&mess_reboot);
-							move_to_track(0);
-							reboot();
-							break;
-
-						case 66:
+                                                case 66:
 						case 11:
-							hxc_printf_box((char*)&mess_reboot);
-							move_to_track(0);
-							reboot();
+                                   			hxc_printf_box((char*)&mess_reboot);
+                                   			move_to_track(0);
+                                   			reboot();
 
 							break;
 
@@ -957,10 +711,14 @@ int main(int argc, char* argv[])
 						}
 					}
 				}while(!read_entry);
+
                         }
                 }
-        }
 
+
+        }
+        
         for(;;);
+	return 0;
 }
 

@@ -4,18 +4,15 @@
 //-------------------------------------------------------------
 // System specific types
 //-------------------------------------------------------------
-#ifndef DEF_BYTE
-#define DEF_BYTE
-	//typedef unsigned char BYTE;
+#ifndef BYTE
+	typedef unsigned char BYTE;
 #endif
 
-#ifndef DEF_UINT16
-#define DEF_UINT16
+#ifndef UINT16
 	typedef unsigned short UINT16;
 #endif
 
-#ifndef DEF_UINT32
-#define DEF_UINT32
+#ifndef UINT32
 	typedef unsigned long UINT32;
 #endif
 
@@ -34,9 +31,8 @@
 //-------------------------------------------------------------
 // Structure Packing Compile Options
 //-------------------------------------------------------------
-#define STRUCT_PACK	
+#define STRUCT_PACK 	
 #define STRUCT_PACK_BEGIN	
 #define STRUCT_PACK_END		
-#define STRUCT_PACK_PREEND
 
 #endif

@@ -12,12 +12,6 @@ typedef struct cfgfile_
 	unsigned char slot_index;
 	unsigned short update_cnt;
 
-	
-	// ADDED NORECESS
-	unsigned char load_last_floppy;
-	unsigned char buzzer_step_duration;  // 0xD8 <> 0xFF
-    unsigned char lcd_scroll_speed;
-
 }cfgfile;
 
 //unsigned char get_device_parameters(struct DirectoryEntry *pDirEnt);

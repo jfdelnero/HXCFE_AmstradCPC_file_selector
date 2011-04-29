@@ -61,11 +61,7 @@
 #define FAT32_TYPECODE2						 	 0x0C
 #define PARTITION1_LBA_BEGIN_LOCATION	 		 454
 #define PARTITION1_SIZE_LOCATION	 			 458
-
-#define FAT_DIR_ENTRY_SIZE						 32
-#define FAT_SFN_SIZE_FULL						 11			
-#define FAT_SFN_SIZE_PARTIAL					 8
-
+	
 //-----------------------------------------------------------------------------
 // FAT32 File Attributes and Types
 //-----------------------------------------------------------------------------
@@ -89,7 +85,7 @@
 #define FAT32_INVALID_CLUSTER	0xFFFFFFFF
 
 STRUCT_PACK_BEGIN
-struct fat_dir_entry STRUCT_PACK
+typedef struct STRUCT_PACK
 {
 	unsigned char Name[11];
 	unsigned char Attr;
@@ -103,7 +99,7 @@ struct fat_dir_entry STRUCT_PACK
 	unsigned char WrtDate[2];
 	UINT16 FstClusLO;
 	UINT32 FileSize;
-} STRUCT_PACK_PREEND;
+} FAT32_ShortEntry;
 STRUCT_PACK_END
 
 #endif
