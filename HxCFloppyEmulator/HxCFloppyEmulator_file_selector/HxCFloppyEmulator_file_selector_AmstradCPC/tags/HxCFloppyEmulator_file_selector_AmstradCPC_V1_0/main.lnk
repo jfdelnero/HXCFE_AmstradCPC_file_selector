@@ -1,0 +1,22 @@
+-im file
+-k .
+-l z80
+-b _CODE=0x0130
+-b _DATA=0x8000
+-b _HEAP=0x9A00
+-b _OVERLAY=0x9A00
+-b _CABS=0x9A00
+-b _BSS=0x9A00
+crt0.o
+fectrl.o
+gui_utils.o
+cpcbioscall.o
+./fat32/fat_write.rel
+./fat32/fat_table.rel
+./fat32/fat_string.rel
+./fat32/fat_misc.rel
+./fat32/fat_filelib.rel
+./fat32/fat_access.rel
+
+-e
+

@@ -1,0 +1,18 @@
+D/cpcxfs////
+D/fat32////
+D/graphx////
+D/tools////
+/background.bmp/1.1/Sat Jul 17 19:08:30 2010/-kb/
+/cfg_file.h/1.1/Sat Jun 19 08:21:08 2010/-ko/
+/cpcbioscall.h/1.4/Wed Jul 14 15:11:17 2010/-ko/
+/cpcbioscall.s/1.6/Sun Jul 18 20:52:15 2010/-ko/
+/crt0.s/1.1/Fri Jun 18 22:12:54 2010/-ko/
+/deexo.s/1.2/Sun Jul 18 17:18:23 2010/-ko/
+/fectrl.c/1.7/Fri Jul 23 22:12:08 2010/-ko/
+/gui_utils.c/1.5/Sun Jul 18 19:46:38 2010/-ko/
+/gui_utils.h/1.2/Thu Jul 08 17:16:28 2010/-ko/
+/hxcbl.lnk/1.1/Tue Jul 27 14:05:36 2010/-ko/
+/main.lnk/1.5/Sun Jul 18 20:48:10 2010/-ko/
+/makefile/1.6/Thu Aug 05 10:52:09 2010/-ko/
+/startfe.bat/1.2/Wed Jul 14 10:49:30 2010/-ko/
+/z80.lib/1.1/Fri Jun 18 07:41:36 2010/-kb/
