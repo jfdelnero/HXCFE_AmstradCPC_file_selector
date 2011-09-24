@@ -1,163 +1,262 @@
 
-	org &c000
+	org &5800
 	
-; READ "startROM.s"
+	LD      HL,(#BE7D)              ; Adresses variables Amsdos
+    LD      A,(HL)                  ; Lecteur courant
+    PUSH    AF                      ; Sauvegarde lecteur courant
+    LD      C,7
+    LD      DE,#40
+    LD      HL,#ABFF
+    CALL    #BCCE                   ; Initalisation ROM DISC
+    POP     AF
+    LD      HL,(#BE7D)
+    LD      (HL),A 
+    
+	jp codeStart
 	
-codeStart:
+hxcPackedData
+	INCBIN "hxc.prg.pck"
+hxcPackedData_end
+	
+codeStart:	
+	ld a, 2
+	call #bc0e
+	
+       ld   b,13
+       ld   c,b
+       call #BC38 ; SCR SET BORDER
+       
+       xor a
+       ld   b,13
+       ld   c,b
+       call #BC32 ; background
+       
+       ld a, 1
+       ld   b,0
+       ld   c,b
+       call #BC32 ; background
+	
 	di
-	exx
 	push af
+	ex af, af'
+	push af
+	ex af, af'	
+	exx
 	push hl
 	push de
 	push bc
-	exx
-	
-	ld hl, fontPackedData
-	ld de, &9a00
-	call unpack
-	
+	exx	
 	ld hl, hxcPackedData
 	ld de, &100
-	call unpack
-	
+	call unpack	
 	exx
 	pop bc
 	pop de
 	pop hl
+	exx	
+	ex af, af'	
 	pop af
-	exx
+	ex af, af'	
+	pop af
 	ei
-	
-	;db &ed, &ff
+	 
+	 xor a
+	ld (#bf04 ), a	
 	jp &100
 	
 
 ; HL = source
 ; DE = destination
 unpack:
+	inc hl;
+	inc hl;
+	inc hl;
+	inc hl;
 
-deexo:		ld	ixh,128
+	ld a, 128;
 
-		ld	b,52
-		ld	iy,exo_mapbasebits
-		push	de
-exo_initbits:	ld	a,b
-		sub	4
-		and	15
-		jr	nz,exo_node1
+	exx;
+	ld de, 1;
+	exx;
 
-		ld	de,1		;DE=b2
-exo_node1:	ld	c,16
-exo_get4bits:	call	exo_getbit
-		rl	c
-		jr	nc,exo_get4bits
-		ld	(iy+0),c	;bits[i]=b1
+depack_loop
+	add a, a;
+	jr nz, getbit1;
 
-		push	hl
-		inc	c
-		ld	hl,0
-		scf
-exo_setbit:	adc	hl,hl
-		dec	c
-		jr	nz,exo_setbit
-		ld	(iy+52),e
-		ld	(iy+104),d	;base[i]=b2
-		add	hl,de
-		ex	de,hl
-		inc	iy
+	ld a, (hl);
+	inc hl;
+	rla;
 
-		pop	hl
-		djnz	exo_initbits
-		inc	c
-		
-exo_literalseq:	pop	de
-exo_literalcopy:ldir			;copy literal(s)
-exo_mainloop:	ld	c,1
-		call	exo_getbit	;literal?
-		jr	c,exo_literalcopy
-		ld	c,255
-exo_getindex:	inc	c
-		call	exo_getbit
-		jr	nc,exo_getindex
-		ld	a,c		;C=index
-		cp	16
-		ret	z
-		jr	c,exo_continue
-		push	de
-		ld	d,16
-		call	exo_getbits
-		jr	exo_literalseq
-exo_continue:	push	de
-		call	exo_getpair
-		push	bc
-		pop	af
-		ex	af,af'		;lenght in AF'
-		ld	de,512+48	;1?
-		dec	bc
-		ld	a,b
-		or	c
-		jr	z,exo_goforit
-		ld	de,1024+32
-		dec	bc		;2?
-		ld	a,b
-		or	c
-		jr	z,exo_goforit
-		ld	e,16
-exo_goforit:	call	exo_getbits
-		ld	a,e
-		add	a,c
-		ld	c,a
-		call	exo_getpair	;bc=offset
-		pop	de		;de=destination
-		push	hl		
-		ld	h,d
-		ld	l,e
-		sbc	hl,bc		;hl=origin
-		ex	af,af'
-		push	af
-		pop	bc		;bc=lenght
-		ldir
-		pop	hl		;Keep HL, DE is updated
-		jr	exo_mainloop	;Next!
+getbit1
+	jr c, output_compressed;
+	ldi;
 
-exo_getpair:	ld	iy,exo_mapbasebits
-		ld	b,0
-		add	iy,bc
-		ld	d,[iy+0]
-		call	exo_getbits
-		ld	a,c
-		add	a,[iy+52]
-		ld	c,a
-		ld	a,b
-		adc	a,[iy+104]
-		ld	b,a
-		ret
+	add a, a;
+	jr nz, getbit0;
 
-exo_getbits:	ld	bc,0		;get D bits in BC
-exo_gettingbits:dec	d
-		ret	m
-		call	exo_getbit
-		rl	c
-		rl	b
-		jr	exo_gettingbits
+	ld a, (hl);
+	inc hl;
+	rla;
 
-exo_getbit:	ld	a,ixh		;get one bit
-		add	a,a
-		ld	ixh,a
-		ret	nz
-		ld	a,(hl)
-		inc	hl
-		rla
-		ld	ixh,a
-		ret
+getbit0
+ jr c, output_compressed;
+	ldi;
 
-exo_mapbasebits:
-		defs	156	;tables for bits, baseL, baseH
-	
-hxcPackedData
-	INCBIN "hxc.prg.pck"
-hxcPackedData_end
-	
-fontPackedData
-	INCBIN "fasttext.bin.pck"
-fontPackedData_end
+	add a, a;
+	jr nz, getbit2;
+
+	ld a, (hl);
+	inc hl;
+	rla;
+
+getbit2
+	jr c,output_compressed;
+	ldi;
+
+	add a, a;
+	jr nz, getbit3;
+
+	ld a, (hl);
+	inc hl;
+	rla;
+
+getbit3
+	jr c, output_compressed;
+	ldi;
+	jr depack_loop;
+
+output_compressed
+	ld c, (hl);
+	inc hl;
+
+output_match
+	ld b, 0;
+	bit 7, c;
+	jr z, output_match1;
+
+	add a, a;
+	jr nz, getbit4;
+
+	ld a, (hl);
+	inc hl;
+	rla;
+
+getbit4
+	rl b;
+
+	add a, a;
+	jr nz, getbit5;
+
+	ld a, (hl);
+	inc hl;
+	rla;
+
+getbit5
+	rl b;
+
+	add a, a;
+	jr nz, getbit6;
+
+	ld a, (hl);
+	inc hl;
+	rla;
+
+getbit6
+	rl b;
+
+	add a, a;
+	jr nz, getbit7;
+
+	ld a, (hl);
+	inc hl;
+	rla;
+
+getbit7 
+	jr c, output_match1;
+	res 7, c;
+
+output_match1
+	inc bc;
+
+	exx;
+	ld h, d;
+	ld l, e;
+	ld b, e;
+
+get_gamma_value_size
+	exx;
+
+	add a, a;
+	jr nz, getbit8;
+
+	ld a, (hl);
+	inc hl;
+	rla;
+
+getbit8
+	exx;
+	jr nc, get_gamma_value_size_end;
+	inc b;
+	jr get_gamma_value_size;
+
+get_gamma_value_bits
+	exx;
+
+	add a, a;
+	jr nz, getbit9;
+
+	ld a, (hl);
+	inc hl;
+	rla;
+
+getbit9
+	exx;
+	adc hl, hl;
+
+get_gamma_value_size_end
+	djnz get_gamma_value_bits;
+
+get_gamma_value_end
+	inc hl;
+	exx;
+
+	ret c;
+
+	push hl;
+
+	exx;
+	push hl;
+	exx;
+
+	ld h, d;
+	ld l, e;
+	sbc hl, bc;
+
+	pop bc;
+
+	ldir;
+
+	pop hl;
+
+	add a, a;
+	jr nz, getbita;
+
+	ld a, (hl);
+	inc hl;
+	rla;
+
+getbita
+	jr c, output_compressed;
+	ldi;
+
+	add a, a;
+	jr nz, getbitb;
+
+	ld a, (hl);
+	inc hl;
+	rla;
+
+getbitb
+	jr c, output_compressed;
+	ldi;
+	JP depack_loop;

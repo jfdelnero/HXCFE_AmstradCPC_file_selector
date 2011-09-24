@@ -11,9 +11,10 @@ _read_sector::
         ld      c,#07
         call    0xb90f   ;ROM7 disquette
 
-        ld      hl,#4
-        add     hl,sp
-        ld      e,(hl)   ;drive number
+	.db #0xed, #0xff
+	
+		LD HL,(#0xBE7D)
+        LD E,(HL) ; lecteur courant dans A (0 ou 1)
 
         ld      hl,#5
         add     hl,sp
@@ -52,7 +53,8 @@ _write_sector::
 
         ld      hl,#4
         add     hl,sp
-        ld      e,(hl)   ;drive number
+		LD HL,(#0xBE7D)
+        LD E,(HL) ; lecteur courant dans A (0 ou 1)
 
         ld      hl,#5
         add     hl,sp
@@ -164,8 +166,21 @@ _wait_key2::
 ;char _reboot();
 
 _reboot::
-        jp 0x0
-        ret
+
+		ld a, #1
+reboot1:
+		push af
+		call #0xBD19
+		
+		ld hl, #0x1000
+		ld de, #0x1000
+		ld bc, #0x200
+		ldir
+		
+		pop af
+		jr nz, reboot1
+
+        call 0x0
 
 ;-------------------------------------------------------------------------------------------
 ;void _init_key(unsigned char c);
@@ -177,13 +192,76 @@ _init_key::
         ld b,a
         call  0xBB27
         ret
+        
+_init_all::
 
+	;.db 0xed, 0xff
+	call #0xB906 ; KL_L_ROM_ENABLE
+	
+	ld hl, #0x3800
+	ld de, #0x9A00
+	ld bc, #1016
+	ldir	
+	
+	call #0xB909 ; KL_L_ROM_DISABLE
+	
+	ret
+
+; IN: a = char to print
+; IN: de = screen ptr
+PrivatePrintChar:	
+	ld l, a
+	ld h, #0
+	add hl, hl ; * 2
+	add hl, hl ; * 4
+	add hl, hl ; * 8
+	ld bc, #0x9A00
+	add hl, bc
+	
+	ld b, #8
+	ld a, ( hl )
+	ld ( de ), a
+	inc hl
+	set 3, d
+	ld a, ( hl )
+	ld ( de ), a
+	inc hl
+	ld a, d
+	add a, b
+	ld d, a
+	ld a, ( hl )
+	ld ( de ), a
+	inc hl
+	set 3, d
+	ld a, ( hl )
+	ld ( de ), a
+	inc hl
+	ld a, d
+	add a, b
+	ld d, a
+	ld a, ( hl )
+	ld ( de ), a
+	inc hl
+	set 3, d
+	ld a, ( hl )
+	ld ( de ), a
+	inc hl
+	ld a, d
+	add a, b
+	ld d, a
+	ld a, ( hl )
+	ld ( de ), a
+	inc hl
+	set 3, d
+	ld a, ( hl )
+	ld ( de ), a
+
+	ret
+	
 ;-------------------------------------------------------------------------------------------
 ;void fastPrintChar(unsigned char *screenBuffer, unsigned char c );
 .globl _fastPrintChar
 _fastPrintChar::
-	;.db 0xed, 0xff
-	
 	pop bc
 	pop de
 	pop hl
@@ -192,20 +270,15 @@ _fastPrintChar::
 	push de
 	push bc
 	
-	ld ix, #charText
-	ld ( ix ), l
-	
-	.db #0xc3, #0x00, #0x9A ; jp &9A00
-	
-charText::
-	.db #0, #0
-	
+	ld a, l
+	call PrivatePrintChar	
+	ret
+
+
 ;-------------------------------------------------------------------------------------------
 ;void fastPrintString(unsigned char *screenBuffer, unsigned char *string );
 .globl _fastPrintString
 _fastPrintString::
-	;.db 0xed, 0xff
-	
 	pop bc
 	pop de
 	pop ix
@@ -214,7 +287,21 @@ _fastPrintString::
 	push de
 	push bc
 	
-	.db #0xc3, #0x00, #0x9A ; jp &9A00
+	; ix = string
+	; de = screenBuffer
+	
+	;.db 0xed, 0xff
+	
+fastPrintString_loop:
+	ld a, ( ix )
+	or a
+	ret z
+	inc ix
+	push de
+	call PrivatePrintChar
+	pop de
+	inc de
+	jr fastPrintString_loop
 	
 ;-------------------------------------------------------------------------------------------
 ;void clear_line(unsigned char y_pos);

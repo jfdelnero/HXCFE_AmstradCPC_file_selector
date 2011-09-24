@@ -1,30 +1,3 @@
-/*
-//
-// Copyright (C) 2009, 2010, 2011 Jean-François DEL NERO
-//
-// This file is part of the HxCFloppyEmulator file selector.
-//
-// HxCFloppyEmulator file selector may be used and distributed without restriction
-// provided that this copyright statement is not removed from the file and that any
-// derivative work contains the original copyright notice and the associated
-// disclaimer.
-//
-// HxCFloppyEmulator file selector is free software; you can redistribute it
-// and/or modify  it under the terms of the GNU General Public License
-// as published by the Free Software Foundation; either version 2
-// of the License, or (at your option) any later version.
-//
-// HxCFloppyEmulator file selector is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-//   See the GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with HxCFloppyEmulator file selector; if not, write to the Free Software
-// Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-//
-*/
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -52,7 +25,7 @@ const char *helpText[] =
 	"",
 	"  Programming by Jean-Francois Del Nero (HxC2001)",
 	"  and Arnaud Storq (http://www.norecess.net), 2010-2011",
-	"  also using Rob's fatlib, exomizer and PDT's char output routine",
+	"  Using Rob's fatlib and BitBuster.",
 	"",
 	"Visit http://hxc2001.free.fr/floppy_drive_emulator for updates",
 	"",
@@ -72,9 +45,13 @@ const char *szSoundVolumeDiscAccess[] =
 };
 int soundVolumeDiscAccessCount = sizeof( szSoundVolumeDiscAccess ) / sizeof( char * );
 
+extern void init_all(void);
+
 void init_display(void)
 {
-	hxc_fastprintf( 0, 0, "SDCard HxC Floppy Emulator Manager V2.2 - Firmware V0.0.0.0 - 'H' for help" );
+	init_all();
+
+	hxc_fastprintf( 0, 0, "SDCard HxC Floppy Emulator Manager V2.4 - Firmware V0.0.0.0 - 'H' for help" );
 //	hxc_fastprintf( 0, 1, "Press 'H' key for help !");
 }
 
