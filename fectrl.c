@@ -1,26 +1,26 @@
 /*
 //
-// Copyright (C) 2009, 2010, 2011 Jean-François DEL NERO
+// Copyright (C) 2006, 2007, 2008, 2009 Jean-François DEL NERO
 //
-// This file is part of the HxCFloppyEmulator file selector.
+// This file is part of HxCFloppyEmulator.
 //
-// HxCFloppyEmulator file selector may be used and distributed without restriction
-// provided that this copyright statement is not removed from the file and that any
+// HxCFloppyEmulator may be used and distributed without restriction provided
+// that this copyright statement is not removed from the file and that any
 // derivative work contains the original copyright notice and the associated
 // disclaimer.
 //
-// HxCFloppyEmulator file selector is free software; you can redistribute it
+// HxCFloppyEmulator is free software; you can redistribute it
 // and/or modify  it under the terms of the GNU General Public License
 // as published by the Free Software Foundation; either version 2
 // of the License, or (at your option) any later version.
 //
-// HxCFloppyEmulator file selector is distributed in the hope that it will be useful,
+// HxCFloppyEmulator is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 //   See the GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with HxCFloppyEmulator file selector; if not, write to the Free Software
+// along with HxCFloppyEmulator; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 */
@@ -106,7 +106,6 @@ unsigned char g_standby_tmr;    //0xFF disable, other -> on x second
 unsigned char g_buzzer_duty_cycle;
 unsigned char g_buzzer_step_duration;  // 0xD8 <> 0xFF
 
-
 /*void hxc_memcpy(void* d,void* s,unsigned short copyCount)
 {
   unsigned short c;
@@ -148,12 +147,12 @@ void print_hex(unsigned char * buffer, int size)
 	}
 } */
 
-unsigned char Flopwr( unsigned char * buffer,unsigned char diskdrive, unsigned char sector_id, unsigned char track, unsigned char count )
+unsigned char Flopwr( unsigned char * buffer,unsigned char sector_id, unsigned char track, unsigned char count )
 {
 	unsigned char ret;
 	do
 	{
-		ret=write_sector(buffer,diskdrive,track,sector_id);
+		ret=write_sector(buffer,32,track,sector_id);
 		buffer=buffer+512;
 		count--;
 		sector_id++;
@@ -162,13 +161,13 @@ unsigned char Flopwr( unsigned char * buffer,unsigned char diskdrive, unsigned c
 	return ret;
 }
 
-unsigned char Floprd( unsigned char * buffer,unsigned char diskdrive, unsigned char sector_id, unsigned char track, unsigned char count )
+unsigned char Floprd( unsigned char * buffer,unsigned char sector_id, unsigned char track, unsigned char count )
 {
 	unsigned char ret;
 
 	do
 	{
-		ret=read_sector(buffer,diskdrive,track,sector_id);
+		ret=read_sector(buffer,32,track,sector_id);
 		buffer=buffer+512;
 		count--;
 		sector_id++;
@@ -209,28 +208,17 @@ char setlbabase(unsigned long lba)
 	dacs->parameter_4=0xA5;
 	dacs->parameter_5=0x00;
 
-	ret=Flopwr( sector, floppydrive, 0, 255, 1 );
+	ret=Flopwr( sector, 0, 255, 1 );
 	return ret;
 }
 
-
-int media_init()
+unsigned char detect_media_ret;
+int detect_media()
 {
-	unsigned char ret;
 	direct_access_status_sector * dass;
-	unsigned char ** ptr;
-
-	ptr=(unsigned char **)0xBE7D;
-
-	floppydrive=**ptr;
-
-	last_setlbabase=0xFFFFFF00;
-
-	cfg_disk_drive((unsigned char *)&fpcfgbuffer);
-
-
-	ret=Floprd((unsigned char*)&sector, floppydrive, 0, 255, 1 );
-	if(!ret)
+	
+	detect_media_ret=Floprd((unsigned char*)&sector, 0, 255, 1 );
+	if(!detect_media_ret)
 	{
 		dass=(direct_access_status_sector *)sector;
 		if(!strcmp(dass->DAHEADERSIGNATURE,"HxCFEDA"))
@@ -241,6 +229,39 @@ int media_init()
 
 		hxc_printf_box_error("Bad signature - HxC Floppy Emulator not found!");
 	}
+
+	return 0;
+}
+
+int media_init()
+{
+	unsigned char ret;
+	unsigned char retDriveB;
+	unsigned char ** ptr;
+	unsigned char drive;
+
+	last_setlbabase=0xFFFFFF00;
+
+	cfg_disk_drive((unsigned char *)&fpcfgbuffer);
+
+	if ( detect_media() == 1 )
+	{
+		return 1;
+	}
+	ret = detect_media_ret;
+
+	ptr=(unsigned char **)0xBE7D;
+	drive=**ptr;
+	if ( drive == 0 )
+	{
+		**ptr = 1;
+
+		if ( detect_media() == 1 )
+		{
+			return 1;
+		}
+	}
+
 	hxc_printf_box_error("ERROR: Floppy Access error!  [%d]",ret);
 
 	return 0;
@@ -258,12 +279,12 @@ int media_read(unsigned long lba_sector, unsigned char *buffer)
 
 	if(diff<8)
 	{
-		ret=Floprd( (unsigned char*)buffer, floppydrive, (diff)+1, 255, 1 );
+		ret=Floprd( (unsigned char*)buffer, (diff)+1, 255, 1 );
 	}
 	else
 	{
 		setlbabase(lba_sector);
-		ret=Floprd( (unsigned char*)buffer, floppydrive, 1, 255, 1 );
+		ret=Floprd( (unsigned char*)buffer, 1, 255, 1 );
 		last_setlbabase=lba_sector;
 	}
 
@@ -274,7 +295,7 @@ int media_read(unsigned long lba_sector, unsigned char *buffer)
 	}
 	else
 	{
-		hxc_printf_box_error("ERROR: Floppy Write Access error!  [%d:%d]",floppydrive,ret);
+		hxc_printf_box_error("ERROR: Floppy Read Access error!  [%d:%d]",floppydrive,ret);
 		return 0;
 	}
 }
@@ -290,12 +311,12 @@ int media_write(unsigned long lba_sector, unsigned char *buffer)
 
 	if(diff<8)
 	{
-		ret=Flopwr( (unsigned char*)buffer, floppydrive, (diff)+1, 255, 1 );
+		ret=Flopwr( (unsigned char*)buffer, (diff)+1, 255, 1 );
 	}
 	else
 	{
 		setlbabase(lba_sector);
-		ret=Flopwr( (unsigned char*)buffer, floppydrive, 1, 255, 1 );
+		ret=Flopwr( (unsigned char*)buffer, 1, 255, 1 );
 		last_setlbabase=lba_sector;
 	}
 	
@@ -590,14 +611,21 @@ void enter_sub_dir(disk_in_drive *disk_ptr)
 			j=strlen( currentPath );
 			i=0;
 			c = disk_ptr->DirEnt.longName[i];
-			while(( c >= (32+1) ) && (c <= 127))
+			while(( c >= 32 ) && (c <= 127))
 			{
 				currentPath[j+i]=c;
 				i++;
 				c = disk_ptr->DirEnt.longName[i];
 			}
-			currentPath[j+i]='/';
-			currentPath[j+i+1]=0;
+
+			i += j;
+
+			while ( currentPath[i-1] == 32 )
+			{
+				i--;
+			}
+			currentPath[i]='/';
+			currentPath[i+1]=0;
 		}
 	}
 
@@ -940,6 +968,7 @@ int main(int argc, char* argv[])
 							save_cfg_file(sdfecfg_file);
 							hxc_printf_box((char*)&mess_reboot);
 							move_to_track(0);
+							//return 0;
 							reboot();
 							break;
 
@@ -947,8 +976,8 @@ int main(int argc, char* argv[])
 						case 11:
 							hxc_printf_box((char*)&mess_reboot);
 							move_to_track(0);
+							//return 0;
 							reboot();
-
 							break;
 
 						default:
@@ -961,6 +990,7 @@ int main(int argc, char* argv[])
                 }
         }
 
-        for(;;);
+
+		return 0;
 }
 

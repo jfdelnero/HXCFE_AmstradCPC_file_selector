@@ -10,13 +10,13 @@
 crt0.o
 fectrl.o
 gui_utils.o
-cpcbioscall.o
 ./fat32/fat_write.rel
 ./fat32/fat_table.rel
 ./fat32/fat_string.rel
 ./fat32/fat_misc.rel
 ./fat32/fat_filelib.rel
 ./fat32/fat_access.rel
+cpcbioscall.o
 ./fat32/fat_cache.rel
 
 -e

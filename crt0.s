@@ -15,39 +15,46 @@
 ;; Stack is already setup by CPC firmware.
 
 init:
+	call #0xb903
+       
+    call _main
+    
+    ret
+    
+    ;ld hl, #0xbf04
+    ;ld a, (hl)
+    ;or a
+    ;ret z
+    
+    ;ld a, #2
+    ;call #0xbc0e
+    
+	;ld hl, #0xbf03
+	;ld a, (hl)
+	;call #0xbc0e
+	
+       ;ld hl, #0xbf00
+	;	ld a, (hl)
+;		ld   b,a
+;       ld   c,b
+ ;      call #0xBC38 ; SCR SET BORDER
+       
+  ;     ld hl, #0xbf01
+  ;     ld a, (hl)
+;		ld b, a		
+;       ld   c,b
+;		xor a
+ ;      call #0xBC32 ; background
+       
+  ;     ld hl, #0xbf02
+;		ld a, (hl)
+;		ld b, a	
+ ;      ld   c,b
+  ;     ld a, #1
+   ;    call #0xBC32 ; background
+	
+	ret
 
-;; Initialise global variables
-        call    gsinit
-	
-	
-	ld a, #2
-	call #0xbc0e
-	
-       ld   b,#1
-       ld   c,b
-       call #0xBC38 ; SCR SET BORDER
-       
-       ld a, #0
-       ld   b,#1
-       ld   c,b
-       call #0xBC32 ; background
-       
-       ld a, #1
-       ld   b,#20
-       ld   c,b
-       call #0xBC32 ; background
-       
-       
-	ld bc, #0xbc06
-	out (c), c
-	inc b
-	ld a, #25
-	out (c), a
-       
-	call	_main
-	jp	_exit
-
-	;; Ordering of segments for the linker.
 	.area	_HOME
 	.area	_CODE
     .area   _GSINIT
@@ -59,8 +66,6 @@ init:
 
    .area   _CODE
 __clock::
-;;	ld		a,#2
-;;  rst     0x08
 	ret
 	
 _exit::

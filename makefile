@@ -43,7 +43,7 @@ AFLAGS = -g
 #
 # crt0.s must be first because it contains the startup code
 
-OBJS_O = crt0.o cpcbioscall.o fectrl.o gui_utils.o ./fat32/fat_access.o ./fat32/fat_filelib.o ./fat32/fat_misc.o ./fat32/fat_string.o ./fat32/fat_table.o ./fat32/fat_write.o ./fat32/fat_cache.o
+OBJS_O = crt0.o fectrl.o gui_utils.o ./fat32/fat_access.o  cpcbioscall.o ./fat32/fat_filelib.o ./fat32/fat_misc.o ./fat32/fat_string.o ./fat32/fat_table.o ./fat32/fat_write.o ./fat32/fat_cache.o
 
 
 # This is the rule to build the executable called 'file'.
@@ -62,23 +62,25 @@ OBJS_O = crt0.o cpcbioscall.o fectrl.o gui_utils.o ./fat32/fat_access.o ./fat32/
 file: $(OBJS_O)
 	sdldz80 -f main.lnk
 	./tools/makebin -p -b 256 < file.ihx > hxc.prg
-	./tools/exomizer raw hxc.prg -o hxc.prg.tmp.pck
-	./tools/exoopt hxc.prg.tmp.pck hxc.prg.pck
-	./tools/exomizer raw fasttext.bin -o fasttext.bin.tmp.pck
-	./tools/exoopt fasttext.bin.tmp.pck fasttext.bin.pck
+	./tools/bitbuster hxc.prg hxc.prg.pck
 	./tools/Pasmo startCore.s startCore.bin
 	./tools/Pasmo --amsdos start.s hxc.bin
 	./cpcxfs/cpcxfsw -f -b -nd AUTOBOOT.dsk -p hxc.bin
+	./tools/Pasmo --amsdos startROM.s HXC24.ROM
+	./cpcxfs/cpcxfsw -f -b -nd HXC24ROM.dsk -p HXC24.ROM
+	./tools/Pasmo startROM.s HXC24.ROM
 	#mkdir ./Output
 	#mv --force ./AUTOBOOT.DSK Output
 	./tools/hxcfloppyemulator_convert.exe AUTOBOOT.DSK -HFE >hfeconv.log
+	./tools/hxcfloppyemulator_convert.exe HXC24ROM.DSK -HFE >hfeconv.log
 	mv --force AUTOBOOT_DSK.hfe AUTOBOOT.HFE
+	mv --force HXC24ROM_DSK.hfe HXC24ROM.HFE
 
 # use this rule to clean up all intermediate build files
 #
 # e.g. "make clean"
 clean:
-	rm *.o *.rel *.asm *.sym *.lst *.map *.ihx fat32/*.o fat32/*.rel fat32/*.asm fat32/*.sym fat32/*.lst fat32/*.map fat32/*.bin fat32/*.ihx
+	rm *.o *.rel *.hfe *.rom *.asm *.sym *.lst *.map *.ihx fat32/*.o fat32/*.rel fat32/*.asm fat32/*.sym fat32/*.lst fat32/*.map fat32/*.bin fat32/*.ihx
 
 
 # this rule defines how we can produce a '.o' file from a '.c' file
