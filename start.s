@@ -1,5 +1,5 @@
 
-	org &5800
+	org &6200
 	
 codeStart:
 	

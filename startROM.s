@@ -40,43 +40,7 @@ text_rom:
 	db 0
 
 command_hxc:
-	;call #BC3B ; SCR_GET_BORDER
-	;ld a, c
-	;ld ( #bf00 ), a
-	
-	;xor a
-	;call #BC35 ; SCR_GET_INK
-	;ld a, b
-	;ld ( #bf01 ), a
-	
-	;ld a, #1
-	;call #BC35 ; SCR_GET_INK
-	;ld a, b
-	;ld ( #bf02 ), a
-	
-	;call #BC11 ; SCR_GET_MODE
-	;ld ( #bf03 ), a
-	
-	
-	ld a, 2
-	call #bc0e
-	
-       ld   b,13
-       ld   c,b
-       call #BC38 ; SCR SET BORDER
-       
-       ld a, 0
-       ld   b,13
-       ld   c,b
-       call #BC32 ; background
-       
-       ld a, 1
-       ld   b,0
-       ld   c,b
-       call #BC32 ; background
-       
 	di
-	push af
 	ex af, af'
 	push af
 	ex af, af'	
@@ -96,12 +60,26 @@ command_hxc:
 	ex af, af'	
 	pop af
 	ex af, af'	
-	pop af
 	ei
 	
-	ld a, 1
-	ld (#bf04 ), a
-	jp &100
+	ld a, 2
+	call #bc0e
+	
+   ld   b,13
+   ld   c,b
+   call #BC38 ; SCR SET BORDER
+   
+   ld a, 0
+   ld   b,13
+   ld   c,b
+   call #BC32 ; background
+   
+   ld a, 1
+   ld   b,0
+   ld   c,b
+   call #BC32 ; background
+
+    jp &100
 	
 
 ; HL = source

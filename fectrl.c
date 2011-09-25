@@ -147,12 +147,12 @@ void print_hex(unsigned char * buffer, int size)
 	}
 } */
 
-unsigned char Flopwr( unsigned char * buffer,unsigned char sector_id, unsigned char track, unsigned char count )
+unsigned char Flopwr( unsigned char * buffer,unsigned char diskdrive, unsigned char sector_id, unsigned char track, unsigned char count )
 {
 	unsigned char ret;
 	do
 	{
-		ret=write_sector(buffer,32,track,sector_id);
+		ret=write_sector(buffer,diskdrive,track,sector_id);
 		buffer=buffer+512;
 		count--;
 		sector_id++;
@@ -161,13 +161,13 @@ unsigned char Flopwr( unsigned char * buffer,unsigned char sector_id, unsigned c
 	return ret;
 }
 
-unsigned char Floprd( unsigned char * buffer,unsigned char sector_id, unsigned char track, unsigned char count )
+unsigned char Floprd( unsigned char * buffer,unsigned char diskdrive, unsigned char sector_id, unsigned char track, unsigned char count )
 {
 	unsigned char ret;
 
 	do
 	{
-		ret=read_sector(buffer,32,track,sector_id);
+		ret=read_sector(buffer,diskdrive,track,sector_id);
 		buffer=buffer+512;
 		count--;
 		sector_id++;
@@ -208,17 +208,28 @@ char setlbabase(unsigned long lba)
 	dacs->parameter_4=0xA5;
 	dacs->parameter_5=0x00;
 
-	ret=Flopwr( sector, 0, 255, 1 );
+	ret=Flopwr( sector, floppydrive, 0, 255, 1 );
 	return ret;
 }
 
-unsigned char detect_media_ret;
-int detect_media()
+int media_init()
 {
+	unsigned char ret;
+	unsigned char ret2;
 	direct_access_status_sector * dass;
-	
-	detect_media_ret=Floprd((unsigned char*)&sector, 0, 255, 1 );
-	if(!detect_media_ret)
+	unsigned char ** ptr;
+
+	ptr=(unsigned char **)0xBE7D;
+
+	floppydrive=**ptr;
+
+	last_setlbabase=0xFFFFFF00;
+
+	cfg_disk_drive((unsigned char *)&fpcfgbuffer);
+
+
+	ret=Floprd((unsigned char*)&sector, floppydrive, 0, 255, 1 );
+	if(!ret)
 	{
 		dass=(direct_access_status_sector *)sector;
 		if(!strcmp(dass->DAHEADERSIGNATURE,"HxCFEDA"))
@@ -230,36 +241,27 @@ int detect_media()
 		hxc_printf_box_error("Bad signature - HxC Floppy Emulator not found!");
 	}
 
-	return 0;
-}
-
-int media_init()
-{
-	unsigned char ret;
-	unsigned char retDriveB;
-	unsigned char ** ptr;
-	unsigned char drive;
-
-	last_setlbabase=0xFFFFFF00;
-
-	cfg_disk_drive((unsigned char *)&fpcfgbuffer);
-
-	if ( detect_media() == 1 )
+	if ( floppydrive == 1 )
 	{
-		return 1;
+		floppydrive = 0;
 	}
-	ret = detect_media_ret;
-
-	ptr=(unsigned char **)0xBE7D;
-	drive=**ptr;
-	if ( drive == 0 )
+	else
 	{
-		**ptr = 1;
+		floppydrive = 1;
+	}
+	**ptr = floppydrive;
 
-		if ( detect_media() == 1 )
+	ret2=Floprd((unsigned char*)&sector, floppydrive, 0, 255, 1 );
+	if(!ret2)
+	{
+		dass=(direct_access_status_sector *)sector;
+		if(!strcmp(dass->DAHEADERSIGNATURE,"HxCFEDA"))
 		{
+			hxc_printf(FIRMWARE_VERSION_X_POS,FIRMWARE_VERSION_Y_POS,"- Firmware %s - 'H' for help" ,dass->FIRMWAREVERSION);
 			return 1;
 		}
+
+		hxc_printf_box_error("Bad signature - HxC Floppy Emulator not found!");
 	}
 
 	hxc_printf_box_error("ERROR: Floppy Access error!  [%d]",ret);
@@ -279,12 +281,12 @@ int media_read(unsigned long lba_sector, unsigned char *buffer)
 
 	if(diff<8)
 	{
-		ret=Floprd( (unsigned char*)buffer, (diff)+1, 255, 1 );
+		ret=Floprd( (unsigned char*)buffer, floppydrive, (diff)+1, 255, 1 );
 	}
 	else
 	{
 		setlbabase(lba_sector);
-		ret=Floprd( (unsigned char*)buffer, 1, 255, 1 );
+		ret=Floprd( (unsigned char*)buffer, floppydrive, 1, 255, 1 );
 		last_setlbabase=lba_sector;
 	}
 
@@ -295,7 +297,7 @@ int media_read(unsigned long lba_sector, unsigned char *buffer)
 	}
 	else
 	{
-		hxc_printf_box_error("ERROR: Floppy Read Access error!  [%d:%d]",floppydrive,ret);
+		hxc_printf_box_error("ERROR: Floppy Write Access error!  [%d:%d]",floppydrive,ret);
 		return 0;
 	}
 }
@@ -311,12 +313,12 @@ int media_write(unsigned long lba_sector, unsigned char *buffer)
 
 	if(diff<8)
 	{
-		ret=Flopwr( (unsigned char*)buffer, (diff)+1, 255, 1 );
+		ret=Flopwr( (unsigned char*)buffer, floppydrive, (diff)+1, 255, 1 );
 	}
 	else
 	{
 		setlbabase(lba_sector);
-		ret=Flopwr( (unsigned char*)buffer, 1, 255, 1 );
+		ret=Flopwr( (unsigned char*)buffer, floppydrive, 1, 255, 1 );
 		last_setlbabase=lba_sector;
 	}
 	
@@ -968,7 +970,6 @@ int main(int argc, char* argv[])
 							save_cfg_file(sdfecfg_file);
 							hxc_printf_box((char*)&mess_reboot);
 							move_to_track(0);
-							//return 0;
 							reboot();
 							break;
 
@@ -976,7 +977,6 @@ int main(int argc, char* argv[])
 						case 11:
 							hxc_printf_box((char*)&mess_reboot);
 							move_to_track(0);
-							//return 0;
 							reboot();
 							break;
 
