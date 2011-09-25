@@ -1,5 +1,5 @@
 
-	org &5800
+	org &6200
 	
 	LD      HL,(#BE7D)              ; Adresses variables Amsdos
     LD      A,(HL)                  ; Lecteur courant
@@ -19,25 +19,8 @@ hxcPackedData
 hxcPackedData_end
 	
 codeStart:	
-	ld a, 2
-	call #bc0e
-	
-       ld   b,13
-       ld   c,b
-       call #BC38 ; SCR SET BORDER
-       
-       xor a
-       ld   b,13
-       ld   c,b
-       call #BC32 ; background
-       
-       ld a, 1
-       ld   b,0
-       ld   c,b
-       call #BC32 ; background
 	
 	di
-	push af
 	ex af, af'
 	push af
 	ex af, af'	
@@ -57,12 +40,27 @@ codeStart:
 	ex af, af'	
 	pop af
 	ex af, af'	
-	pop af
 	ei
 	 
-	 xor a
-	ld (#bf04 ), a	
-	jp &100
+	
+	ld a, 2
+	call #bc0e
+	
+   ld   b,13
+   ld   c,b
+   call #BC38 ; SCR SET BORDER
+   
+   xor a
+   ld   b,13
+   ld   c,b
+   call #BC32 ; background
+   
+   ld a, 1
+   ld   b,0
+   ld   c,b
+   call #BC32 ; background
+   
+   jp &100
 	
 
 ; HL = source

@@ -11,10 +11,9 @@ _read_sector::
         ld      c,#07
         call    0xb90f   ;ROM7 disquette
 
-	.db #0xed, #0xff
-	
-		LD HL,(#0xBE7D)
-        LD E,(HL) ; lecteur courant dans A (0 ou 1)
+        ld      hl,#4
+        add     hl,sp
+        ld      e,(hl)   ;drive number
 
         ld      hl,#5
         add     hl,sp
@@ -53,8 +52,7 @@ _write_sector::
 
         ld      hl,#4
         add     hl,sp
-		LD HL,(#0xBE7D)
-        LD E,(HL) ; lecteur courant dans A (0 ou 1)
+        ld      e,(hl)   ;drive number
 
         ld      hl,#5
         add     hl,sp

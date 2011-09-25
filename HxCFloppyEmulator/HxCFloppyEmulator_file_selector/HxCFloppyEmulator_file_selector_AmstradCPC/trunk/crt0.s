@@ -15,11 +15,13 @@
 ;; Stack is already setup by CPC firmware.
 
 init:
+	call gsinit
+        
 	call #0xb903
        
     call _main
     
-    ret
+    jp _exit
     
     ;ld hl, #0xbf04
     ;ld a, (hl)
